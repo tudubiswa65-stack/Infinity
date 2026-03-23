@@ -765,6 +765,11 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         onBrushSizeChange={setBrushSize}
         onNameEdit={setName}
         isConnected={isConnected}
+        onJumpTo={(x, y) => {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          jumpTo(x, y, rect.width, rect.height);
+        }}
       />
 
       {!dbAvailable && (

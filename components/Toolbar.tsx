@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, FormEvent } from "react";
 import { CanvasMode } from "@/hooks/useCanvas";
 import { Identity } from "@/types";
 
@@ -18,6 +19,7 @@ interface ToolbarProps {
   onBrushSizeChange: (size: number) => void;
   onNameEdit: (name: string) => void;
   isConnected: boolean;
+  onJumpTo: (x: number, y: number) => void;
 }
 
 const MODES: { key: CanvasMode; label: string; title: string }[] = [
@@ -42,12 +44,28 @@ export default function Toolbar({
   onBrushSizeChange,
   onNameEdit,
   isConnected,
+  onJumpTo,
 }: ToolbarProps) {
+  const [coordInput, setCoordInput] = useState("");
+  const [coordError, setCoordError] = useState(false);
+
   function handleNameClick() {
     const newName = prompt("Enter your display name:", identity?.name ?? "");
     if (newName && newName.trim()) {
       onNameEdit(newName.trim());
     }
+  }
+
+  function handleJumpSubmit(e: FormEvent) {
+    e.preventDefault();
+    setCoordError(false);
+    const parts = coordInput.split(",").map((s) => s.trim());
+    if (parts.length !== 2) { setCoordError(true); return; }
+    const x = parseFloat(parts[0]);
+    const y = parseFloat(parts[1]);
+    if (isNaN(x) || isNaN(y)) { setCoordError(true); return; }
+    onJumpTo(x, y);
+    setCoordInput("");
   }
 
   return (
@@ -139,6 +157,54 @@ export default function Toolbar({
       )}
 
       <div style={{ flex: 1 }} />
+
+      {/* Coordinate Jump */}
+      <form
+        onSubmit={handleJumpSubmit}
+        title="Jump to coordinate (x,y)"
+        style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}
+      >
+        <input
+          type="text"
+          value={coordInput}
+          onChange={(e) => { setCoordInput(e.target.value); setCoordError(false); }}
+          placeholder="x,y"
+          style={{
+            width: 100,
+            background: coordError ? "rgba(248,113,113,0.1)" : "#1a1a1a",
+            border: `1px solid ${coordError ? "#f87171" : "#2a2a2a"}`,
+            borderRadius: 6,
+            padding: "3px 8px",
+            color: "#e5e5e5",
+            fontSize: "0.8rem",
+            outline: "none",
+            transition: "border-color 0.15s",
+          }}
+          onFocus={(e) => { if (!coordError) e.target.style.borderColor = "#6366f1"; }}
+          onBlur={(e) => { if (!coordError) e.target.style.borderColor = "#2a2a2a"; }}
+        />
+        <button
+          type="submit"
+          title="Jump to coordinate"
+          style={{
+            background: "#6366f1",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            padding: "3px 10px",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            transition: "background 0.15s",
+            flexShrink: 0,
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.background = "#4f52d6")}
+          onMouseOut={(e) => (e.currentTarget.style.background = "#6366f1")}
+        >
+          Go →
+        </button>
+      </form>
 
       {/* Hint */}
       <span style={{ color: "#444", fontSize: "0.75rem", flexShrink: 0 }}>
