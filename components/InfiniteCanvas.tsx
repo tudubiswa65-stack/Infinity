@@ -5,6 +5,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
 } from "react";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useCanvas } from "@/hooks/useCanvas";
@@ -55,6 +56,14 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   const [brushSize, setBrushSize] = useState(3);
   const [isConnected, setIsConnected] = useState(false);
   const [dbAvailable, setDbAvailable] = useState(true);
+
+  // Map each message id to a stacking index (oldest = 1, newest = N) so newer
+  // messages always render on top when they overlap with older ones.
+  const messageZIndexMap = useMemo(() => {
+    const withTs = messages.map((m) => ({ id: m.id, ts: new Date(m.created_at).getTime() }));
+    withTs.sort((a, b) => a.ts - b.ts);
+    return new Map(withTs.map((m, i) => [m.id, i + 1]));
+  }, [messages]);
 
   // Cursor world position for the coordinate HUD
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
@@ -807,7 +816,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           <rect width="100%" height="100%" fill="url(#dots)" />
         </svg>
 
-        {/* Messages */}
+        {/* Messages — newer messages receive a higher z-index so they always appear on top */}
         {messages.map((msg) => {
           const screen = worldToScreen(msg.coord_x, msg.coord_y);
           return (
@@ -821,6 +830,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               onReply={handleReply}
               onNavigateTo={handleNavigateToMessage}
               isHighlighted={msg.id === highlightedMessageId}
+              zIndex={messageZIndexMap.get(msg.id) ?? 1}
             />
           );
         })}

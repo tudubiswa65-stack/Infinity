@@ -11,6 +11,8 @@ interface MessageCardProps {
   onReply?: (message: Message) => void;
   onNavigateTo?: (message: Message) => void;
   isHighlighted?: boolean;
+  /** Stacking order index (older = lower, newer = higher). Highlighted messages are boosted above all others. */
+  zIndex?: number;
 }
 
 function relativeTime(dateStr: string): string {
@@ -32,6 +34,7 @@ export default function MessageCard({
   onReply,
   onNavigateTo,
   isHighlighted,
+  zIndex = 1,
 }: MessageCardProps) {
   const fontSize = Math.min(Math.max(12 * scale, 9), 18);
   const padding = Math.max(6 * scale, 4);
@@ -65,7 +68,7 @@ export default function MessageCard({
         pointerEvents: "auto",
         cursor: "default",
         userSelect: "text",
-        zIndex: isHighlighted ? 20 : 10,
+        zIndex: isHighlighted ? zIndex + 1000 : zIndex,
         transition: "box-shadow 0.2s ease, border-color 0.2s ease",
       }}
     >
