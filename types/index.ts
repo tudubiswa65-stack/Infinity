@@ -8,6 +8,7 @@ export interface Message {
   author_color: string;
   content: string;
   created_at: string;
+  reply_to_id?: string | null;
 }
 
 export interface Stroke {

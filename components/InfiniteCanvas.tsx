@@ -18,6 +18,9 @@ interface InfiniteCanvasProps {
 }
 
 const FETCH_BUFFER = 500;
+// How far (in world units) the viewport must travel beyond the already-fetched
+// region before we issue another DB query. Larger = fewer queries when panning.
+const FETCH_CACHE_BUFFER = 1500;
 const TOOLBAR_HEIGHT = 56;
 
 export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteCanvasProps) {
@@ -54,7 +57,8 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     screenX: number;
     screenY: number;
     value: string;
-  }>({ visible: false, worldX: 0, worldY: 0, screenX: 0, screenY: 0, value: "" });
+    replyToId: string | null;
+  }>({ visible: false, worldX: 0, worldY: 0, screenX: 0, screenY: 0, value: "", replyToId: null });
 
   // Drawing state
   const isDrawing = useRef(false);
@@ -72,17 +76,46 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   useEffect(() => { brushColorRef.current = brushColor; }, [brushColor]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
 
+  // Track last-fetched world-space bounds to avoid redundant DB queries
+  const fetchedBoundsRef = useRef<{
+    minX: number; maxX: number; minY: number; maxY: number; scale: number;
+  } | null>(null);
+  // Whether a fetch is already in flight
+  const isFetchingRef = useRef(false);
+
   // Fetch messages and strokes on viewport change
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     if (!containerRef.current) return;
+    if (isFetchingRef.current) return; // skip if already fetching
+
     const rect = containerRef.current.getBoundingClientRect();
     const topLeft = screenToWorld(-FETCH_BUFFER, -FETCH_BUFFER);
     const bottomRight = screenToWorld(rect.width + FETCH_BUFFER, rect.height + FETCH_BUFFER);
 
+    // Skip if the viewport is still well within the previously fetched region
+    // and the zoom level hasn't changed meaningfully.
+    if (!force && fetchedBoundsRef.current) {
+      const fb = fetchedBoundsRef.current;
+      const scaleChanged = fb.scale > 0 && Math.abs(scale - fb.scale) / fb.scale > 0.2;
+      const withinCache =
+        topLeft.x >= fb.minX &&
+        topLeft.y >= fb.minY &&
+        bottomRight.x <= fb.maxX &&
+        bottomRight.y <= fb.maxY;
+      if (!scaleChanged && withinCache) return;
+    }
+
+    isFetchingRef.current = true;
+    // Expand the query bounds by FETCH_CACHE_BUFFER so we cache ahead of time
+    const qMinX = topLeft.x - FETCH_CACHE_BUFFER;
+    const qMaxX = bottomRight.x + FETCH_CACHE_BUFFER;
+    const qMinY = topLeft.y - FETCH_CACHE_BUFFER;
+    const qMaxY = bottomRight.y + FETCH_CACHE_BUFFER;
+
     try {
       const [msgRes, strokeRes] = await Promise.all([
         fetch(
-          `/api/messages?minX=${topLeft.x}&maxX=${bottomRight.x}&minY=${topLeft.y}&maxY=${bottomRight.y}`
+          `/api/messages?minX=${qMinX}&maxX=${qMaxX}&minY=${qMinY}&maxY=${qMaxY}`
         ),
         fetch(`/api/strokes?limit=300`),
       ]);
@@ -92,6 +125,8 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         setMessages(data.messages ?? []);
         setDbAvailable(true);
         setIsConnected(true);
+        // Update cached bounds to the expanded query region
+        fetchedBoundsRef.current = { minX: qMinX, maxX: qMaxX, minY: qMinY, maxY: qMaxY, scale };
       } else if (msgRes.status === 503) {
         setDbAvailable(false);
         setIsConnected(false);
@@ -103,8 +138,10 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       }
     } catch {
       setIsConnected(false);
+    } finally {
+      isFetchingRef.current = false;
     }
-  }, [screenToWorld]);
+  }, [screenToWorld, scale]);
 
   // Initial fetch + refetch on viewport change (debounced)
   const fetchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,17 +252,22 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           stroke_width: brushSizeRef.current,
         }),
       });
-      fetchData();
+      fetchData(true);
     } catch {
       // Ignore
     }
   }, [fetchData]);
 
   // Submit a text message
-  const submitMessage = useCallback(async (content: string, worldX: number, worldY: number) => {
+  const submitMessage = useCallback(async (
+    content: string,
+    worldX: number,
+    worldY: number,
+    replyToId: string | null = null,
+  ) => {
     const id = identityRef.current;
     if (!id || !content.trim()) return;
-    setTextInput((prev) => ({ ...prev, visible: false, value: "" }));
+    setTextInput((prev) => ({ ...prev, visible: false, value: "", replyToId: null }));
 
     try {
       await fetch("/api/messages", {
@@ -240,9 +282,10 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           author_name: id.name,
           author_color: brushColorRef.current,
           content: content.trim(),
+          ...(replyToId ? { reply_to_id: replyToId } : {}),
         }),
       });
-      fetchData();
+      fetchData(true);
     } catch {
       // Ignore network errors
     }
@@ -325,6 +368,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             screenX: e.clientX,
             screenY: e.clientY,
             value: "",
+            replyToId: null,
           });
         }
       }
@@ -373,6 +417,23 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     // Only run when identity first becomes available
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.color]);
+
+  // Handle reply: open text input positioned near the original message
+  const handleReply = useCallback(
+    (msg: Message) => {
+      const screen = worldToScreen(msg.coord_x, msg.coord_y);
+      setTextInput({
+        visible: true,
+        worldX: msg.coord_x + 20,
+        worldY: msg.coord_y + 20,
+        screenX: Math.min(screen.x + 40, window.innerWidth - 160),
+        screenY: Math.min(screen.y + TOOLBAR_HEIGHT + 40, window.innerHeight - 160),
+        value: "",
+        replyToId: msg.id,
+      });
+    },
+    [worldToScreen]
+  );
 
   const cursor = mode === "draw" ? "crosshair" : isPanning.current ? "grabbing" : "crosshair";
 
@@ -478,6 +539,8 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               screenX={screen.x}
               screenY={screen.y}
               scale={scale}
+              allMessages={messages}
+              onReply={handleReply}
             />
           );
         })}
@@ -521,6 +584,27 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               backdropFilter: "blur(12px)",
             }}
           >
+            {/* Reply-to context banner */}
+            {textInput.replyToId && (() => {
+              const parent = messages.find((m) => m.id === textInput.replyToId);
+              return parent ? (
+                <div
+                  style={{
+                    borderLeft: "2px solid #6366f1",
+                    paddingLeft: 8,
+                    marginBottom: 6,
+                    opacity: 0.8,
+                  }}
+                >
+                  <span style={{ color: parent.author_color, fontSize: "0.75rem", fontWeight: 600 }}>
+                    ↩ Replying to {parent.author_name}
+                  </span>
+                  <p style={{ color: "#aaa", fontSize: "0.75rem", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 264 }}>
+                    {parent.content.slice(0, 80)}{parent.content.length > 80 ? "…" : ""}
+                  </p>
+                </div>
+              ) : null;
+            })()}
             <textarea
               autoFocus
               value={textInput.value}
@@ -530,10 +614,10 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  submitMessage(textInput.value, textInput.worldX, textInput.worldY);
+                  submitMessage(textInput.value, textInput.worldX, textInput.worldY, textInput.replyToId);
                 }
                 if (e.key === "Escape") {
-                  setTextInput((prev) => ({ ...prev, visible: false, value: "" }));
+                  setTextInput((prev) => ({ ...prev, visible: false, value: "", replyToId: null }));
                 }
               }}
               placeholder="Type your message... (Enter to submit, Shift+Enter for newline)"
@@ -565,7 +649,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               <div style={{ display: "flex", gap: 6 }}>
                 <button
                   onClick={() =>
-                    setTextInput((prev) => ({ ...prev, visible: false, value: "" }))
+                    setTextInput((prev) => ({ ...prev, visible: false, value: "", replyToId: null }))
                   }
                   style={{
                     background: "transparent",
@@ -580,7 +664,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                   Cancel
                 </button>
                 <button
-                  onClick={() => submitMessage(textInput.value, textInput.worldX, textInput.worldY)}
+                  onClick={() => submitMessage(textInput.value, textInput.worldX, textInput.worldY, textInput.replyToId)}
                   style={{
                     background: "#6366f1",
                     border: "none",

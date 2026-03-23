@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabase";
 import { messageLimiter } from "@/lib/redis";
+import { getClientIp } from "@/lib/getClientIp";
 
 export async function GET(request: NextRequest) {
   const supabase = createSupabaseClient("anon");
@@ -38,9 +39,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Valid X-User-Id header required" }, { status: 400 });
   }
 
-  // Rate limiting
+  // Rate limiting — keyed by IP so each device is limited independently
   if (messageLimiter) {
-    const result = await messageLimiter.limit(userId);
+    const ip = getClientIp(request);
+    const result = await messageLimiter.limit(ip);
     if (!result.success) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Max 10 messages per minute." },
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { coord_x, coord_y, author_name, author_color, content } = body as Record<string, unknown>;
+  const { coord_x, coord_y, author_name, author_color, content, reply_to_id } = body as Record<string, unknown>;
 
   if (typeof content !== "string" || content.trim().length === 0) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });
@@ -83,6 +85,13 @@ export async function POST(request: NextRequest) {
   if (typeof author_color !== "string" || !colorRegex.test(author_color)) {
     return NextResponse.json({ error: "author_color must be a valid hex color" }, { status: 400 });
   }
+  if (reply_to_id !== undefined && reply_to_id !== null && typeof reply_to_id !== "string") {
+    return NextResponse.json({ error: "reply_to_id must be a UUID string" }, { status: 400 });
+  }
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof reply_to_id === "string" && !uuidRegex.test(reply_to_id)) {
+    return NextResponse.json({ error: "reply_to_id must be a valid UUID" }, { status: 400 });
+  }
 
   const supabase = createSupabaseClient("service");
   if (!supabase) {
@@ -99,6 +108,7 @@ export async function POST(request: NextRequest) {
       author_name: author_name.trim(),
       author_color,
       content: content.trim(),
+      ...(reply_to_id ? { reply_to_id } : {}),
     })
     .select()
     .single();

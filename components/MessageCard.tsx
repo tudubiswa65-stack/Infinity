@@ -7,6 +7,8 @@ interface MessageCardProps {
   screenX: number;
   screenY: number;
   scale: number;
+  allMessages?: Message[];
+  onReply?: (message: Message) => void;
 }
 
 function relativeTime(dateStr: string): string {
@@ -19,9 +21,20 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export default function MessageCard({ message, screenX, screenY, scale }: MessageCardProps) {
+export default function MessageCard({
+  message,
+  screenX,
+  screenY,
+  scale,
+  allMessages,
+  onReply,
+}: MessageCardProps) {
   const fontSize = Math.min(Math.max(12 * scale, 9), 18);
   const padding = Math.max(6 * scale, 4);
+
+  const replyParent = message.reply_to_id
+    ? allMessages?.find((m) => m.id === message.reply_to_id)
+    : null;
 
   return (
     <div
@@ -44,6 +57,42 @@ export default function MessageCard({ message, screenX, screenY, scale }: Messag
         zIndex: 10,
       }}
     >
+      {/* Reply-to excerpt */}
+      {replyParent && (
+        <div
+          style={{
+            borderLeft: `2px solid ${replyParent.author_color}88`,
+            paddingLeft: Math.max(4 * scale, 4),
+            marginBottom: Math.max(4 * scale, 4),
+            opacity: 0.7,
+          }}
+        >
+          <span
+            style={{
+              color: replyParent.author_color,
+              fontSize: Math.max(fontSize * 0.75, 8),
+              fontWeight: 600,
+            }}
+          >
+            ↩ {replyParent.author_name}
+          </span>
+          <p
+            style={{
+              color: "#aaa",
+              fontSize: Math.max(fontSize * 0.75, 8),
+              margin: 0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: "100%",
+            }}
+          >
+            {replyParent.content.slice(0, 60)}
+            {replyParent.content.length > 60 ? "…" : ""}
+          </p>
+        </div>
+      )}
+
       <p
         style={{
           color: "#e5e5e5",
@@ -85,7 +134,31 @@ export default function MessageCard({ message, screenX, screenY, scale }: Messag
         <span style={{ color: "#555", fontSize: Math.max(fontSize * 0.75, 8) }}>
           · {relativeTime(message.created_at)}
         </span>
+
+        {onReply && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onReply(message);
+            }}
+            style={{
+              marginLeft: "auto",
+              background: "transparent",
+              border: "none",
+              color: "#555",
+              fontSize: Math.max(fontSize * 0.75, 8),
+              cursor: "pointer",
+              padding: "1px 4px",
+              borderRadius: 4,
+              flexShrink: 0,
+            }}
+            title="Reply to this message"
+          >
+            ↩
+          </button>
+        )}
       </div>
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabase";
 import { strokeLimiter } from "@/lib/redis";
+import { getClientIp } from "@/lib/getClientIp";
 
 export async function GET(request: NextRequest) {
   const supabase = createSupabaseClient("anon");
@@ -32,7 +33,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (strokeLimiter) {
-    const result = await strokeLimiter.limit(userId);
+    const ip = getClientIp(request);
+    const result = await strokeLimiter.limit(ip);
     if (!result.success) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Max 5 strokes per minute." },
