@@ -60,9 +60,10 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   // Map each message id to a stacking index (oldest = 1, newest = N) so newer
   // messages always render on top when they overlap with older ones.
   const messageZIndexMap = useMemo(() => {
-    const withTs = messages.map((m) => ({ id: m.id, ts: new Date(m.created_at).getTime() }));
-    withTs.sort((a, b) => a.ts - b.ts);
-    return new Map(withTs.map((m, i) => [m.id, i + 1]));
+    const sorted = [...messages].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    return new Map(sorted.map((m, i) => [m.id, i + 1]));
   }, [messages]);
 
   // Cursor world position for the coordinate HUD
@@ -107,6 +108,14 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   useEffect(() => { brushColorRef.current = brushColor; }, [brushColor]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  // Sets of known IDs used for O(1) realtime deduplication
+  const messageIdsRef = useRef<Set<string>>(new Set());
+  const strokeIdsRef = useRef<Set<string>>(new Set());
+
+  // requestAnimationFrame handle for cursor HUD throttling
+  const cursorRafRef = useRef<number | null>(null);
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   // Track last-fetched world-space bounds to avoid redundant DB queries
   const fetchedBoundsRef = useRef<{
@@ -156,7 +165,9 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
       if (msgRes.ok) {
         const data = await msgRes.json();
-        setMessages(data.messages ?? []);
+        const msgs: Message[] = data.messages ?? [];
+        messageIdsRef.current = new Set(msgs.map((m) => m.id));
+        setMessages(msgs);
         setDbAvailable(true);
         setIsConnected(true);
         // Update cached bounds to the expanded query region
@@ -168,7 +179,9 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
       if (strokeRes.ok) {
         const data = await strokeRes.json();
-        setStrokes(data.strokes ?? []);
+        const strks: Stroke[] = data.strokes ?? [];
+        strokeIdsRef.current = new Set(strks.map((s) => s.id));
+        setStrokes(strks);
       }
     } catch {
       setIsConnected(false);
@@ -205,20 +218,20 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "messages" },
             (payload: { new: Record<string, unknown> }) => {
-              setMessages((prev) => {
-                if (prev.find((m) => m.id === payload.new.id)) return prev;
-                return [payload.new as unknown as Message, ...prev];
-              });
+              const id = payload.new.id as string;
+              if (messageIdsRef.current.has(id)) return;
+              messageIdsRef.current.add(id);
+              setMessages((prev) => [payload.new as unknown as Message, ...prev]);
             }
           )
           .on(
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "strokes" },
             (payload: { new: Record<string, unknown> }) => {
-              setStrokes((prev) => {
-                if (prev.find((s) => s.id === payload.new.id)) return prev;
-                return [payload.new as unknown as Stroke, ...prev];
-              });
+              const id = payload.new.id as string;
+              if (strokeIdsRef.current.has(id)) return;
+              strokeIdsRef.current.add(id);
+              setStrokes((prev) => [payload.new as unknown as Stroke, ...prev]);
             }
           )
           .subscribe((status: string) => {
@@ -245,10 +258,15 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const newWidth = canvas.offsetWidth;
+    const newHeight = canvas.offsetHeight;
+    if (canvas.width !== newWidth || canvas.height !== newHeight) {
+      // Resizing the canvas automatically clears it
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
     for (const stroke of strokes) {
       if (stroke.points.length < 2) continue;
@@ -396,8 +414,15 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      // Update cursor world position for the coordinate HUD
-      setCursorWorld(screenToWorld(e.clientX, e.clientY - TOOLBAR_HEIGHT));
+      // Throttle cursor HUD updates to once per animation frame to avoid
+      // triggering a full React re-render on every mouse-move event.
+      pendingCursorRef.current = screenToWorld(e.clientX, e.clientY - TOOLBAR_HEIGHT);
+      if (cursorRafRef.current === null) {
+        cursorRafRef.current = requestAnimationFrame(() => {
+          setCursorWorld(pendingCursorRef.current);
+          cursorRafRef.current = null;
+        });
+      }
 
       // Temporary pan (middle-click or Space+drag)
       if (isTempPanning.current) {
@@ -483,6 +508,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   );
 
   const handleMouseLeave = useCallback(() => {
+    // Cancel any pending cursor RAF and clear the HUD immediately
+    if (cursorRafRef.current !== null) {
+      cancelAnimationFrame(cursorRafRef.current);
+      cursorRafRef.current = null;
+    }
+    pendingCursorRef.current = null;
     setCursorWorld(null);
     if (isTempPanning.current) {
       isTempPanning.current = false;

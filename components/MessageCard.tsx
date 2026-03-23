@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Message } from "@/types";
 
 interface MessageCardProps {
@@ -25,7 +26,7 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export default function MessageCard({
+function MessageCard({
   message,
   screenX,
   screenY,
@@ -207,3 +208,4 @@ export default function MessageCard({
   );
 }
 
+export default memo(MessageCard);
