@@ -63,6 +63,22 @@ export function useCanvas(initialX = 0, initialY = 0) {
     }
   }, []);
 
+  // Apply a zoom factor centered on a screen coordinate (used for pinch-to-zoom)
+  const applyZoom = useCallback(
+    (factor: number, centerX: number, centerY: number) => {
+      setScale((prev) => {
+        const next = Math.min(Math.max(prev * factor, 0.05), 10);
+        const ratio = next / prev;
+        setOffset((o) => ({
+          x: centerX - ratio * (centerX - o.x),
+          y: centerY - ratio * (centerY - o.y),
+        }));
+        return next;
+      });
+    },
+    []
+  );
+
   // Jump to a world coordinate (centers the viewport on it)
   const jumpTo = useCallback(
     (worldX: number, worldY: number, viewportWidth: number, viewportHeight: number) => {
@@ -108,6 +124,7 @@ export function useCanvas(initialX = 0, initialY = 0) {
     screenToWorld,
     worldToScreen,
     jumpTo,
+    applyZoom,
     isPanning,
   };
 }

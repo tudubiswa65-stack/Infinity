@@ -44,6 +44,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     screenToWorld,
     worldToScreen,
     isPanning,
+    applyZoom,
   } = useCanvas(initialX, initialY);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -80,6 +81,11 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   // Track drag distance to distinguish click from drag
   const dragStartPos = useRef({ x: 0, y: 0 });
   const hasDragged = useRef(false);
+
+  // Touch state for pinch-to-zoom
+  const touchLastDist = useRef<number | null>(null);
+  // Whether the current touch gesture started as a two-finger pinch
+  const touchIsPinching = useRef(false);
 
   // Refs for use inside callbacks to avoid stale closures
   const identityRef = useRef(identity);
@@ -488,7 +494,139 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     e.preventDefault();
   }, []);
 
-  // Wheel zoom
+  // Touch handlers for mobile/tablet support
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        dragStartPos.current = { x: touch.clientX, y: touch.clientY };
+        hasDragged.current = false;
+        touchIsPinching.current = false;
+        touchLastDist.current = null;
+        const m = modeRef.current;
+        if (m === "draw") {
+          isDrawing.current = true;
+          const world = screenToWorld(touch.clientX, touch.clientY - TOOLBAR_HEIGHT);
+          currentStroke.current = [world];
+        } else {
+          startPan(touch.clientX, touch.clientY);
+        }
+      } else if (e.touches.length === 2) {
+        // Start pinch-to-zoom — stop any ongoing pan or draw
+        endPan();
+        isDrawing.current = false;
+        if (currentStroke.current.length >= 2) {
+          submitStroke([...currentStroke.current]);
+        }
+        currentStroke.current = [];
+        touchIsPinching.current = true;
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        touchLastDist.current = Math.hypot(dx, dy);
+      }
+    },
+    [startPan, endPan, screenToWorld, submitStroke]
+  );
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 1 && !touchIsPinching.current) {
+        const touch = e.touches[0];
+        const dx = touch.clientX - dragStartPos.current.x;
+        const dy = touch.clientY - dragStartPos.current.y;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+          hasDragged.current = true;
+        }
+        const m = modeRef.current;
+        if (m === "draw" && isDrawing.current) {
+          const world = screenToWorld(touch.clientX, touch.clientY - TOOLBAR_HEIGHT);
+          currentStroke.current.push(world);
+          const canvas = canvasRef.current;
+          if (canvas && currentStroke.current.length >= 2) {
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              const pts = currentStroke.current;
+              const prev = worldToScreen(pts[pts.length - 2].x, pts[pts.length - 2].y);
+              const curr = worldToScreen(pts[pts.length - 1].x, pts[pts.length - 1].y);
+              ctx.beginPath();
+              ctx.strokeStyle = brushColorRef.current;
+              ctx.lineWidth = brushSizeRef.current * scale;
+              ctx.lineCap = "round";
+              ctx.lineJoin = "round";
+              ctx.moveTo(prev.x, prev.y);
+              ctx.lineTo(curr.x, curr.y);
+              ctx.stroke();
+            }
+          }
+        } else {
+          updatePan(touch.clientX, touch.clientY);
+        }
+      } else if (e.touches.length === 2 && touchLastDist.current !== null) {
+        // Pinch-to-zoom
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const dist = Math.hypot(dx, dy);
+        const factor = dist / touchLastDist.current;
+        touchLastDist.current = dist;
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - TOOLBAR_HEIGHT;
+        applyZoom(factor, midX, midY);
+      }
+    },
+    [screenToWorld, worldToScreen, updatePan, scale, applyZoom]
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 0) {
+        // All fingers lifted
+        const m = modeRef.current;
+        if (m === "draw") {
+          isDrawing.current = false;
+          if (currentStroke.current.length >= 2) {
+            submitStroke([...currentStroke.current]);
+          }
+          currentStroke.current = [];
+        } else {
+          endPan();
+          // Tap (not drag, not pinch) in write mode → open message composer
+          if (
+            !hasDragged.current &&
+            !touchIsPinching.current &&
+            m === "write" &&
+            e.changedTouches.length === 1
+          ) {
+            const touch = e.changedTouches[0];
+            const screenX = touch.clientX;
+            const screenY = touch.clientY - TOOLBAR_HEIGHT;
+            const world = screenToWorld(screenX, screenY);
+            setTextInput({
+              visible: true,
+              worldX: world.x,
+              worldY: world.y,
+              screenX: touch.clientX,
+              screenY: touch.clientY,
+              value: "",
+              replyToId: null,
+            });
+          }
+        }
+        touchLastDist.current = null;
+        touchIsPinching.current = false;
+      } else if (e.touches.length === 1) {
+        // One finger lifted from two-finger pinch → resume single-touch pan
+        touchLastDist.current = null;
+        touchIsPinching.current = false;
+        const touch = e.touches[0];
+        dragStartPos.current = { x: touch.clientX, y: touch.clientY };
+        hasDragged.current = true; // prevent spurious tap after pinch
+        startPan(touch.clientX, touch.clientY);
+      }
+    },
+    [endPan, screenToWorld, submitStroke, startPan]
+  );
+
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -599,12 +737,16 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           bottom: 0,
           cursor,
           overflow: "hidden",
+          touchAction: "none",
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
         onContextMenu={handleContextMenu}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         {/* Canvas for strokes */}
         <canvas
@@ -689,6 +831,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             transform: "translate(-50%, -50%)",
           }}
           onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           <div
             style={{
