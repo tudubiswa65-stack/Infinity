@@ -72,6 +72,13 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     [messages]
   );
 
+  // Pre-filtered list of messages that are replies (have reply_to_id set).
+  // Memoized so the thread-connector SVG never re-iterates on unrelated renders.
+  const replyMessages = useMemo(
+    () => messages.filter((msg) => msg.reply_to_id),
+    [messages]
+  );
+
   // Cursor world position for the coordinate HUD
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
 
@@ -883,8 +890,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             overflow: "visible",
           }}
         >
-          {messages
-            .filter((msg) => msg.reply_to_id)
+          {replyMessages
             .map((msg) => {
               const parent = msg.reply_to_id ? messageById.get(msg.reply_to_id) : undefined;
               if (!parent) return null;
@@ -916,7 +922,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               screenX={screen.x}
               screenY={screen.y}
               scale={scale}
-              allMessages={messages}
+              messageById={messageById}
               onReply={handleReply}
               onNavigateTo={handleNavigateToMessage}
               isHighlighted={msg.id === highlightedMessageId}
@@ -972,7 +978,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
             {/* Reply-to context banner */}
             {textInput.replyToId && (() => {
-              const parent = messages.find((m) => m.id === textInput.replyToId);
+              const parent = messageById.get(textInput.replyToId);
               return parent ? (
                 <div
                   style={{

@@ -78,6 +78,13 @@ export async function POST(request: NextRequest) {
   if (typeof coord_x !== "number" || typeof coord_y !== "number") {
     return NextResponse.json({ error: "coord_x and coord_y must be numbers" }, { status: 400 });
   }
+  if (!isFinite(coord_x) || !isFinite(coord_y)) {
+    return NextResponse.json({ error: "coord_x and coord_y must be finite numbers" }, { status: 400 });
+  }
+  const COORD_LIMIT = 1_000_000_000;
+  if (Math.abs(coord_x) > COORD_LIMIT || Math.abs(coord_y) > COORD_LIMIT) {
+    return NextResponse.json({ error: `coord_x and coord_y must be within ±${COORD_LIMIT}` }, { status: 400 });
+  }
   if (typeof author_name !== "string" || author_name.trim().length === 0 || author_name.length > 64) {
     return NextResponse.json({ error: "author_name is required (max 64 chars)" }, { status: 400 });
   }
