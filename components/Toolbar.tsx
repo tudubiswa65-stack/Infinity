@@ -87,174 +87,193 @@ export default function Toolbar({
         userSelect: "none",
       }}
     >
-      {/* Brand */}
-      <span style={{ color: "#6366f1", fontWeight: 700, fontSize: "1.1rem", flexShrink: 0 }}>
-        ∞
-      </span>
-
-      {/* Mode Toggle */}
-      <div style={{ display: "flex", gap: 4, background: "#1a1a1a", borderRadius: 8, padding: 3 }}>
-        {MODES.map(({ key, label, title }) => (
-          <button
-            key={key}
-            onClick={() => onModeChange(key)}
-            title={title}
-            style={{
-              background: mode === key ? "#6366f1" : "transparent",
-              color: mode === key ? "#fff" : "#888",
-              border: "none",
-              borderRadius: 6,
-              padding: "4px 12px",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              transition: "all 0.15s",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Color Palette (write + draw modes) */}
-      {mode !== "pan" && (
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {COLOR_PALETTE.map((color) => (
-            <button
-              key={color}
-              onClick={() => onBrushColorChange(color)}
-              title={color}
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: "50%",
-                background: color,
-                border: brushColor === color ? "2px solid #fff" : "2px solid transparent",
-                cursor: "pointer",
-                padding: 0,
-                transition: "transform 0.15s, border-color 0.15s",
-                transform: brushColor === color ? "scale(1.2)" : "scale(1)",
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Brush Size (draw mode only) */}
-      {mode === "draw" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ color: "#888", fontSize: "0.8rem" }}>Size:</span>
-          <input
-            type="range"
-            min={1}
-            max={20}
-            value={brushSize}
-            onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
-            style={{ width: 80, accentColor: "#6366f1" }}
-          />
-          <span style={{ color: "#888", fontSize: "0.8rem", minWidth: 20 }}>{brushSize}</span>
-        </div>
-      )}
-
-      <div style={{ flex: 1 }} />
-
-      {/* Coordinate Jump */}
-      <form
-        onSubmit={handleJumpSubmit}
-        title="Jump to coordinate (x,y)"
-        style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}
-      >
-        <input
-          type="text"
-          value={coordInput}
-          onChange={(e) => { setCoordInput(e.target.value); setCoordError(false); }}
-          placeholder="x,y"
-          style={{
-            width: 100,
-            background: coordError ? "rgba(248,113,113,0.1)" : "#1a1a1a",
-            border: `1px solid ${coordError ? "#f87171" : "#2a2a2a"}`,
-            borderRadius: 6,
-            padding: "3px 8px",
-            color: "#e5e5e5",
-            fontSize: "0.8rem",
-            outline: "none",
-            transition: "border-color 0.15s",
-          }}
-          onFocus={(e) => { if (!coordError) e.target.style.borderColor = "#6366f1"; }}
-          onBlur={(e) => { if (!coordError) e.target.style.borderColor = "#2a2a2a"; }}
-        />
-        <button
-          type="submit"
-          title="Jump to coordinate"
-          style={{
-            background: "#6366f1",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            padding: "3px 10px",
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-            transition: "background 0.15s",
-            flexShrink: 0,
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.background = "#4f52d6")}
-          onMouseOut={(e) => (e.currentTarget.style.background = "#6366f1")}
-        >
-          Go →
-        </button>
-      </form>
-
-      {/* Hint */}
-      <span style={{ color: "#444", fontSize: "0.75rem", flexShrink: 0 }}>
-        {MODE_HINTS[mode]}
-      </span>
-
-      {/* Connection indicator */}
+      {/* Left section — shrinks when viewport is narrow */}
       <div
         style={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: isConnected ? "#4ade80" : "#f87171",
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          flex: "1 1 0",
+          minWidth: 0,
+          overflow: "hidden",
+        }}
+      >
+        {/* Brand */}
+        <span style={{ color: "#6366f1", fontWeight: 700, fontSize: "1.1rem", flexShrink: 0 }}>
+          ∞
+        </span>
+
+        {/* Mode Toggle */}
+        <div style={{ display: "flex", gap: 4, background: "#1a1a1a", borderRadius: 8, padding: 3, flexShrink: 0 }}>
+          {MODES.map(({ key, label, title }) => (
+            <button
+              key={key}
+              onClick={() => onModeChange(key)}
+              title={title}
+              style={{
+                background: mode === key ? "#6366f1" : "transparent",
+                color: mode === key ? "#fff" : "#888",
+                border: "none",
+                borderRadius: 6,
+                padding: "4px 12px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                transition: "all 0.15s",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Color Palette (write + draw modes) */}
+        {mode !== "pan" && (
+          <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+            {COLOR_PALETTE.map((color) => (
+              <button
+                key={color}
+                onClick={() => onBrushColorChange(color)}
+                title={color}
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: color,
+                  border: brushColor === color ? "2px solid #fff" : "2px solid transparent",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "transform 0.15s, border-color 0.15s",
+                  transform: brushColor === color ? "scale(1.2)" : "scale(1)",
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Brush Size (draw mode only) */}
+        {mode === "draw" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <span style={{ color: "#888", fontSize: "0.8rem" }}>Size:</span>
+            <input
+              type="range"
+              min={1}
+              max={20}
+              value={brushSize}
+              onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
+              style={{ width: 80, accentColor: "#6366f1" }}
+            />
+            <span style={{ color: "#888", fontSize: "0.8rem", minWidth: 20 }}>{brushSize}</span>
+          </div>
+        )}
+
+        {/* Hint */}
+        <span style={{ color: "#444", fontSize: "0.75rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {MODE_HINTS[mode]}
+        </span>
+      </div>
+
+      {/* Right section — always visible */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
           flexShrink: 0,
         }}
-        title={isConnected ? "Connected" : "Offline"}
-      />
+      >
+        {/* Coordinate Jump */}
+        <form
+          onSubmit={handleJumpSubmit}
+          title="Jump to coordinate (x,y)"
+          style={{ display: "flex", gap: 4, alignItems: "center" }}
+        >
+          <input
+            type="text"
+            value={coordInput}
+            onChange={(e) => { setCoordInput(e.target.value); setCoordError(false); }}
+            placeholder="x,y"
+            style={{
+              width: 100,
+              background: coordError ? "rgba(248,113,113,0.1)" : "#1a1a1a",
+              border: `1px solid ${coordError ? "#f87171" : "#2a2a2a"}`,
+              borderRadius: 6,
+              padding: "3px 8px",
+              color: "#e5e5e5",
+              fontSize: "0.8rem",
+              outline: "none",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={(e) => { if (!coordError) e.target.style.borderColor = "#6366f1"; }}
+            onBlur={(e) => { if (!coordError) e.target.style.borderColor = "#2a2a2a"; }}
+          />
+          <button
+            type="submit"
+            title="Jump to coordinate"
+            style={{
+              background: "#6366f1",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "3px 10px",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              transition: "background 0.15s",
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.background = "#4f52d6")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "#6366f1")}
+          >
+            Go →
+          </button>
+        </form>
 
-      {/* User Identity */}
-      {identity && (
-        <button
-          onClick={handleNameClick}
-          title="Click to change name"
+        {/* Connection indicator */}
+        <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "transparent",
-            border: "1px solid #2a2a2a",
-            borderRadius: 6,
-            padding: "4px 10px",
-            cursor: "pointer",
-            transition: "border-color 0.15s",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: isConnected ? "#4ade80" : "#f87171",
             flexShrink: 0,
           }}
-          onMouseOver={(e) => (e.currentTarget.style.borderColor = "#6366f1")}
-          onMouseOut={(e) => (e.currentTarget.style.borderColor = "#2a2a2a")}
-        >
-          <div
+          title={isConnected ? "Connected" : "Offline"}
+        />
+
+        {/* User Identity */}
+        {identity && (
+          <button
+            onClick={handleNameClick}
+            title="Click to change name"
             style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: identity.color,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "transparent",
+              border: "1px solid #2a2a2a",
+              borderRadius: 6,
+              padding: "4px 10px",
+              cursor: "pointer",
+              transition: "border-color 0.15s",
               flexShrink: 0,
             }}
-          />
-          <span style={{ color: "#e5e5e5", fontSize: "0.85rem" }}>{identity.name}</span>
-        </button>
-      )}
+            onMouseOver={(e) => (e.currentTarget.style.borderColor = "#6366f1")}
+            onMouseOut={(e) => (e.currentTarget.style.borderColor = "#2a2a2a")}
+          >
+            <div
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: identity.color,
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ color: "#e5e5e5", fontSize: "0.85rem" }}>{identity.name}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
