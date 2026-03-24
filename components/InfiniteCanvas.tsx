@@ -32,6 +32,12 @@ const FETCH_BUFFER = 500;
 const FETCH_CACHE_BUFFER = 1500;
 const TOOLBAR_HEIGHT = 56;
 
+// World-unit offsets used both when placing a new reply and when computing the
+// expanded-thread layout, so the two always stay in sync.
+const REPLY_STACK_OFFSET_X = 30;   // horizontal indent relative to parent
+const REPLY_STACK_OFFSET_Y = 200;  // vertical gap so reply appears below parent card
+const REPLY_STACK_SPACING = 160;   // vertical space between consecutive replies
+
 export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -146,16 +152,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       // Stack replies vertically below parent with offset
-      const STACK_OFFSET_X = 30;
-      const STACK_OFFSET_Y = 60;
-      const REPLY_SPACING = 70;
-      
       replies.forEach((reply, index) => {
         layout.set(reply.id, {
           parentId,
           index,
-          computedX: parent.coord_x + STACK_OFFSET_X,
-          computedY: parent.coord_y + STACK_OFFSET_Y + (index * REPLY_SPACING),
+          computedX: parent.coord_x + REPLY_STACK_OFFSET_X,
+          computedY: parent.coord_y + REPLY_STACK_OFFSET_Y + (index * REPLY_STACK_SPACING),
         });
       });
     });
@@ -483,6 +485,10 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       if (res.ok) {
         updateFromResponse("messages", res.headers);
         success("Message posted");
+        // Auto-expand the parent thread so the new reply is immediately visible below
+        if (replyToId) {
+          setExpandedThreads((prev) => new Set([...prev, replyToId]));
+        }
         fetchData(true);
       } else if (res.status === 429) {
         handleRateLimitError("messages", res.headers);
@@ -866,21 +872,28 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.color]);
 
-  // Handle reply: open text input positioned near the original message
+  // Handle reply: open text input positioned below the original message
   const handleReply = useCallback(
     (msg: Message) => {
-      const screen = worldToScreen(msg.coord_x, msg.coord_y);
+      // Count existing direct replies to determine vertical stacking offset,
+      // matching the threadLayout so the stored position aligns with expanded view.
+      const existingRepliesCount = messages.filter(m => m.reply_to_id === msg.id).length;
+      const replyWorldX = msg.coord_x + REPLY_STACK_OFFSET_X;
+      const replyWorldY = msg.coord_y + REPLY_STACK_OFFSET_Y + existingRepliesCount * REPLY_STACK_SPACING;
+      const replyScreen = worldToScreen(replyWorldX, replyWorldY);
+      // Keep the text-input composer within the visible viewport
+      const INPUT_MARGIN = 200;
       setTextInput({
         visible: true,
-        worldX: msg.coord_x + 20,
-        worldY: msg.coord_y + 20,
-        screenX: Math.min(screen.x + 40, window.innerWidth - 200),
-        screenY: Math.min(screen.y + TOOLBAR_HEIGHT + 40, window.innerHeight - 200),
+        worldX: replyWorldX,
+        worldY: replyWorldY,
+        screenX: Math.min(Math.max(replyScreen.x, INPUT_MARGIN), window.innerWidth - INPUT_MARGIN),
+        screenY: Math.min(Math.max(replyScreen.y + TOOLBAR_HEIGHT, TOOLBAR_HEIGHT + 40), window.innerHeight - INPUT_MARGIN),
         value: "",
         replyToId: msg.id,
       });
     },
-    [worldToScreen]
+    [worldToScreen, messages]
   );
 
   // Handle view thread: open thread panel for the message
@@ -1041,7 +1054,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             overflow: "visible",
           }}
         >
-          {/* Regular thread connectors for non-expanded threads */}
+        {/* Regular thread connectors for non-expanded threads */}
           {replyMessages
             .filter(msg => !threadLayout.has(msg.id))
             .map((msg) => {
@@ -1059,12 +1072,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                   stroke={parent.author_color}
                   strokeWidth={1.5}
                   strokeDasharray="5 4"
-                  opacity={0.35}
+                  opacity={0.45}
                 />
               );
             })}
           
-          {/* Enhanced connectors for expanded thread views */}
+          {/* YouTube-style vertical+horizontal connectors for expanded thread views */}
           {Array.from(threadLayout.entries()).map(([replyId, layout]) => {
             const reply = messageById.get(replyId);
             const parent = messageById.get(layout.parentId);
@@ -1073,32 +1086,42 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             const replyScreen = worldToScreen(layout.computedX, layout.computedY);
             const parentScreen = worldToScreen(parent.coord_x, parent.coord_y);
             
+            // Vertical line goes from just below the parent card down to the reply level,
+            // then a short horizontal arm reaches right to the reply card.
+            const lineX = parentScreen.x + 8;
+            const lineStartY = parentScreen.y + 28 * scale;
+            const lineEndY = replyScreen.y;
+            const armEndX = replyScreen.x - 10 * scale;
+
             return (
               <g key={`expanded-thread-${replyId}`}>
-                {/* Thread hub dot on parent */}
-                <circle
-                  cx={parentScreen.x}
-                  cy={parentScreen.y + 30}
-                  r={4}
-                  fill={parent.author_color}
-                  opacity={0.8}
-                />
-                {/* Solid connection line from parent to reply */}
-                <path
-                  d={`M ${parentScreen.x} ${parentScreen.y + 34} 
-                      C ${parentScreen.x} ${parentScreen.y + 60}, 
-                        ${replyScreen.x - 20} ${parentScreen.y + 60}, 
-                        ${replyScreen.x - 15} ${replyScreen.y - 30}`}
+                {/* Vertical segment */}
+                <line
+                  x1={lineX}
+                  y1={lineStartY}
+                  x2={lineX}
+                  y2={lineEndY}
                   stroke={parent.author_color}
                   strokeWidth={2}
-                  fill="none"
-                  opacity={0.6}
+                  opacity={0.55}
+                  strokeLinecap="round"
                 />
-                {/* Connection dot on reply */}
+                {/* Horizontal arm to reply */}
+                <line
+                  x1={lineX}
+                  y1={lineEndY}
+                  x2={armEndX}
+                  y2={lineEndY}
+                  stroke={parent.author_color}
+                  strokeWidth={2}
+                  opacity={0.55}
+                  strokeLinecap="round"
+                />
+                {/* Dot at junction with reply */}
                 <circle
-                  cx={replyScreen.x - 15}
-                  cy={replyScreen.y - 30}
-                  r={4}
+                  cx={armEndX}
+                  cy={lineEndY}
+                  r={3}
                   fill={parent.author_color}
                   opacity={0.8}
                 />

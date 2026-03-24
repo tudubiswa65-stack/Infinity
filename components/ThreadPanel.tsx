@@ -11,6 +11,19 @@ interface ThreadPanelProps {
   onNavigateTo: (message: Message) => void;
 }
 
+interface ReplyTreeNode {
+  msg: Message;
+  children: ReplyTreeNode[];
+}
+
+// Maximum nesting depth rendered in the thread panel. Deeper replies still exist
+// in the data but are collapsed to avoid excessive DOM depth and visual clutter.
+const MAX_REPLY_DEPTH = 5;
+
+// Must match the panel background so the "clip" trick for the vertical thread
+// line looks seamless on the last reply row.
+const PANEL_BG = "rgba(15, 15, 15, 0.98)";
+
 function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigateTo }: ThreadPanelProps) {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -38,31 +51,27 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
       }
     }
 
-    // Find all direct and indirect replies
-    const replies = messages.filter((msg) => {
-      if (msg.id === current.id) return false;
-      let checkId: string | null | undefined = msg.reply_to_id;
-      while (checkId) {
-        if (checkId === current.id) return true;
-        const parent = messageById.get(checkId);
-        if (parent) {
-          checkId = parent.reply_to_id;
-        } else {
-          break;
-        }
-      }
-      return false;
-    });
+    // Build a tree of direct replies (recursive, up to 5 levels deep)
+    function buildTree(parentId: string, depth: number = 0): ReplyTreeNode[] {
+      if (depth >= MAX_REPLY_DEPTH) return [];
+      return messages
+        .filter((m) => m.reply_to_id === parentId && m.id !== current.id)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .map((msg) => ({ msg, children: buildTree(msg.id, depth + 1) }));
+    }
 
-    // Sort replies chronologically
-    const sortedReplies = replies.sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
+    const replyTree = buildTree(current.id);
+
+    // Count total replies (all descendants)
+    function countNodes(nodes: ReplyTreeNode[]): number {
+      return nodes.reduce((sum, n) => sum + 1 + countNodes(n.children), 0);
+    }
 
     return {
       ancestors,
       current,
-      replies: sortedReplies,
+      replyTree,
+      totalReplies: countNodes(replyTree),
     };
   })();
 
@@ -76,7 +85,7 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
     return `${new Date(dateStr).toLocaleDateString()}`;
   }
 
-  function renderMessage(msg: Message, isCurrent: boolean, depth: number = 0) {
+  function renderAncestorMessage(msg: Message, isCurrent: boolean) {
     return (
       <div
         key={msg.id}
@@ -172,7 +181,156 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
     );
   }
 
-  const hasContent = thread.ancestors.length > 0 || thread.replies.length > 0;
+  // Render a YouTube-style threaded reply with vertical connector line
+  function renderReplyTree(nodes: ReplyTreeNode[], threadColor: string, depth: number = 0) {
+    if (nodes.length === 0) return null;
+    const avatarSize = depth === 0 ? 32 : 26;
+    const indent = depth * 20;
+
+    return (
+      <div style={{ position: "relative", marginLeft: indent }}>
+        {/* Vertical thread line */}
+        <div
+          style={{
+            position: "absolute",
+            left: avatarSize / 2,
+            top: 0,
+            bottom: 12,
+            width: 2,
+            background: `${threadColor}33`,
+            borderRadius: 1,
+          }}
+        />
+
+        {nodes.map((node, i) => {
+          const isLast = i === nodes.length - 1;
+          return (
+            <div key={node.msg.id} style={{ position: "relative" }}>
+              {/* Short horizontal connector from vertical line to avatar */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: avatarSize / 2,
+                  top: avatarSize / 2,
+                  width: 12,
+                  height: 2,
+                  background: `${threadColor}33`,
+                }}
+              />
+              {/* Clip the vertical line after the last item by overlaying the panel background */}
+              {isLast && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: avatarSize / 2,
+                    top: avatarSize,
+                    bottom: 0,
+                    width: 2,
+                    background: PANEL_BG,
+                    zIndex: 1,
+                  }}
+                />
+              )}
+
+              <div
+                onClick={() => onNavigateTo(node.msg)}
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  paddingLeft: avatarSize + 14,
+                  paddingTop: "8px",
+                  paddingBottom: "8px",
+                  paddingRight: "8px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  transition: "background 0.15s ease",
+                  opacity: isVisible ? 1 : 0,
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = `${node.msg.author_color}11`;
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                {/* Avatar — absolutely positioned to sit on the thread line */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: avatarSize,
+                    height: avatarSize,
+                    borderRadius: "50%",
+                    background: node.msg.author_color,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 700,
+                    color: "#000",
+                    fontSize: depth === 0 ? "0.8rem" : "0.7rem",
+                    zIndex: 2,
+                    boxShadow: "0 0 0 2px rgba(15,15,15,0.98)",
+                  }}
+                >
+                  {node.msg.author_name.charAt(0).toUpperCase()}
+                </div>
+
+                {/* Text content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "2px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: node.msg.author_color,
+                        fontWeight: 600,
+                        fontSize: depth === 0 ? "0.88rem" : "0.82rem",
+                      }}
+                    >
+                      {node.msg.author_name}
+                    </span>
+                    <span style={{ color: "#555", fontSize: "0.75rem" }}>
+                      {formatTime(node.msg.created_at)}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      color: "#ccc",
+                      fontSize: depth === 0 ? "0.88rem" : "0.82rem",
+                      lineHeight: 1.4,
+                      margin: 0,
+                      wordBreak: "break-word",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {node.msg.content}
+                  </p>
+                </div>
+              </div>
+
+              {/* Nested replies */}
+              {node.children.length > 0 && (
+                <div style={{ paddingLeft: avatarSize + 14 }}>
+                  {renderReplyTree(node.children, node.msg.author_color, depth + 1)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const hasContent = thread.ancestors.length > 0 || thread.totalReplies > 0;
 
   return (
     <>
@@ -199,7 +357,7 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
           bottom: 0,
           width: "400px",
           maxWidth: "90vw",
-          background: "rgba(15, 15, 15, 0.98)",
+          background: PANEL_BG,
           borderLeft: "1px solid #2a2a2a",
           zIndex: 2001,
           display: "flex",
@@ -281,7 +439,7 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
             <>
               {/* Ancestors */}
               {thread.ancestors.length > 0 && (
-                <div style={{ marginBottom: "24px" }}>
+                <div style={{ marginBottom: "16px" }}>
                   <h3
                     style={{
                       margin: "0 0 12px 0",
@@ -294,43 +452,44 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
                   >
                     {thread.ancestors.length === 1 ? "Parent" : "Parent Messages"}
                   </h3>
-                  {thread.ancestors.map((msg) => renderMessage(msg, false))}
+                  {thread.ancestors.map((msg) => renderAncestorMessage(msg, false))}
                 </div>
               )}
 
-              {/* Current message */}
-              <div style={{ marginBottom: "24px" }}>
-                <h3
-                  style={{
-                    margin: "0 0 12px 0",
-                    color: "#6366f1",
-                    fontSize: "0.8rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    fontWeight: 600,
-                  }}
-                >
-                  This Message
-                </h3>
-                {renderMessage(thread.current, true)}
-              </div>
-
-              {/* Replies */}
-              {thread.replies.length > 0 && (
-                <div>
+              {/* Current message — rendered as the root of the YouTube-style thread */}
+              <div style={{ marginBottom: "4px" }}>
+                {thread.ancestors.length > 0 && (
                   <h3
                     style={{
                       margin: "0 0 12px 0",
-                      color: "#666",
+                      color: "#6366f1",
                       fontSize: "0.8rem",
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
                       fontWeight: 600,
                     }}
                   >
-                    {thread.replies.length === 1 ? "1 Reply" : `${thread.replies.length} Replies`}
+                    This Message
                   </h3>
-                  {thread.replies.map((msg) => renderMessage(msg, false))}
+                )}
+                {renderAncestorMessage(thread.current, true)}
+              </div>
+
+              {/* Replies — YouTube-style threaded view below the current message */}
+              {thread.totalReplies > 0 && (
+                <div style={{ marginTop: "4px" }}>
+                  <div
+                    style={{
+                      color: "#6366f1",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      marginBottom: "8px",
+                      paddingLeft: "4px",
+                    }}
+                  >
+                    {thread.totalReplies === 1 ? "1 reply" : `${thread.totalReplies} replies`}
+                  </div>
+                  {renderReplyTree(thread.replyTree, thread.current.author_color)}
                 </div>
               )}
             </>
