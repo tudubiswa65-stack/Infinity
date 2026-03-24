@@ -105,6 +105,10 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json({ error: "Each point must have numeric x and y" }, { status: 400 });
     }
+    const p = pt as { x: number; y: number };
+    if (!isFinite(p.x) || !isFinite(p.y)) {
+      return NextResponse.json({ error: "Point coordinates must be finite numbers" }, { status: 400 });
+    }
   }
   const colorRegex = /^#[0-9a-fA-F]{6}$/;
   if (typeof author_color !== "string" || !colorRegex.test(author_color)) {

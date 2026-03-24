@@ -8,7 +8,8 @@ interface MessageCardProps {
   screenX: number;
   screenY: number;
   scale: number;
-  allMessages?: Message[];
+  /** O(1) id→message lookup map used for reply-parent resolution. */
+  messageById?: Map<string, Message>;
   onReply?: (message: Message) => void;
   onNavigateTo?: (message: Message) => void;
   isHighlighted?: boolean;
@@ -31,7 +32,7 @@ function MessageCard({
   screenX,
   screenY,
   scale,
-  allMessages,
+  messageById,
   onReply,
   onNavigateTo,
   isHighlighted,
@@ -42,10 +43,10 @@ function MessageCard({
 
   // replyParent is the referenced message (or undefined if not loaded, or null if no reply_to_id)
   const replyParent = message.reply_to_id
-    ? allMessages?.find((m) => m.id === message.reply_to_id) ?? null
+    ? messageById?.get(message.reply_to_id) ?? null
     : null;
   // True when this message references another but that message isn't available
-  const replyMissing = !!message.reply_to_id && replyParent === null && allMessages !== undefined;
+  const replyMissing = !!message.reply_to_id && replyParent === null && messageById !== undefined;
 
   return (
     <div
