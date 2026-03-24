@@ -9,9 +9,13 @@ import {
 } from "react";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useCanvas } from "@/hooks/useCanvas";
+import { useRateLimit } from "@/hooks/useRateLimit";
+import { useToast } from "@/hooks/useToast";
 import { Message, Stroke } from "@/types";
 import MessageCard from "./MessageCard";
 import Toolbar from "./Toolbar";
+import ThreadPanel from "./ThreadPanel";
+import ToastContainer from "./ToastContainer";
 
 function fmt(n: number): string {
   return n.toFixed(0);
@@ -48,6 +52,8 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     applyZoom,
     jumpTo,
   } = useCanvas(initialX, initialY);
+  const { rateLimits, updateFromResponse, handleRateLimitError, checkCanProceed } = useRateLimit();
+  const { toasts, removeToast, success, error: showError, warning, info } = useToast();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -56,6 +62,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   const [brushSize, setBrushSize] = useState(3);
   const [isConnected, setIsConnected] = useState(false);
   const [dbAvailable, setDbAvailable] = useState(true);
+  const [threadMessage, setThreadMessage] = useState<Message | null>(null);
 
   // Map each message id to a stacking index (oldest = 1, newest = N) so newer
   // messages always render on top when they overlap with older ones.
@@ -71,6 +78,46 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     () => new Map(messages.map((m) => [m.id, m])),
     [messages]
   );
+
+  // Compute reply counts and thread depth for each message
+  const replyCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    messages.forEach((msg) => {
+      counts.set(msg.id, 0);
+    });
+    messages.forEach((msg) => {
+      if (msg.reply_to_id) {
+        const count = counts.get(msg.reply_to_id) ?? 0;
+        counts.set(msg.reply_to_id, count + 1);
+      }
+    });
+    return counts;
+  }, [messages]);
+
+  const messageDepth = useMemo(() => {
+    const depths = new Map<string, number>();
+    messages.forEach((msg) => {
+      depths.set(msg.id, 0);
+    });
+    // Compute depth for each message by following parent chain
+    messages.forEach((msg) => {
+      let depth = 0;
+      let parentId = msg.reply_to_id;
+      const visited = new Set<string>();
+      while (parentId && !visited.has(parentId)) {
+        visited.add(parentId);
+        const parent = messageById.get(parentId);
+        if (parent) {
+          depth++;
+          parentId = parent.reply_to_id;
+        } else {
+          break;
+        }
+      }
+      depths.set(msg.id, depth);
+    });
+    return depths;
+  }, [messages, messageById]);
 
   // Pre-filtered list of messages that are replies (have reply_to_id set).
   // Memoized so the thread-connector SVG never re-iterates on unrelated renders.
@@ -304,8 +351,16 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   const submitStroke = useCallback(async (points: Array<{ x: number; y: number }>) => {
     const id = identityRef.current;
     if (!id || points.length < 2) return;
+
+    // Check rate limit first
+    const canSubmit = checkCanProceed("strokes");
+    if (!canSubmit.allowed) {
+      showError(`Rate limited. Try again in ${canSubmit.secondsUntilReset}s.`);
+      return;
+    }
+
     try {
-      await fetch("/api/strokes", {
+      const res = await fetch("/api/strokes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -317,11 +372,23 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           stroke_width: brushSizeRef.current,
         }),
       });
-      fetchData(true);
+
+      if (res.ok) {
+        updateFromResponse("strokes", res.headers);
+        success("Stroke posted");
+        fetchData(true);
+      } else if (res.status === 429) {
+        handleRateLimitError("strokes", res.headers);
+        const data = await res.json() as { error: string };
+        showError(data.error);
+      } else {
+        const data = await res.json() as { error: string };
+        showError(data.error || "Failed to post stroke");
+      }
     } catch {
-      // Ignore
+      showError("Network error. Please try again.");
     }
-  }, [fetchData]);
+  }, [fetchData, checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
 
   // Submit a text message
   const submitMessage = useCallback(async (
@@ -334,8 +401,15 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     if (!id || !content.trim()) return;
     setTextInput((prev) => ({ ...prev, visible: false, value: "", replyToId: null }));
 
+    // Check rate limit first
+    const canSubmit = checkCanProceed("messages");
+    if (!canSubmit.allowed) {
+      showError(`Rate limited. Try again in ${canSubmit.secondsUntilReset}s.`);
+      return;
+    }
+
     try {
-      await fetch("/api/messages", {
+      const res = await fetch("/api/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -350,11 +424,23 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           ...(replyToId ? { reply_to_id: replyToId } : {}),
         }),
       });
-      fetchData(true);
+
+      if (res.ok) {
+        updateFromResponse("messages", res.headers);
+        success("Message posted");
+        fetchData(true);
+      } else if (res.status === 429) {
+        handleRateLimitError("messages", res.headers);
+        const data = await res.json() as { error: string };
+        showError(data.error);
+      } else {
+        const data = await res.json() as { error: string };
+        showError(data.error || "Failed to post message");
+      }
     } catch {
-      // Ignore network errors
+      showError("Network error. Please try again.");
     }
-  }, [fetchData]);
+  }, [fetchData, checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
 
   // Space key handling — enables temporary pan in any mode
   useEffect(() => {
@@ -379,6 +465,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       }
       if (e.code === "Escape") {
         setTextInput((prev) => ({ ...prev, visible: false, value: "", replyToId: null }));
+        setThreadMessage(null);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -741,6 +828,14 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     [worldToScreen]
   );
 
+  // Handle view thread: open thread panel for the message
+  const handleViewThread = useCallback(
+    (msg: Message) => {
+      setThreadMessage(msg);
+    },
+    []
+  );
+
   // Navigate to a message: pan the viewport so the message is centered, then briefly highlight it
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleNavigateToMessage = useCallback(
@@ -791,6 +886,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         onBrushSizeChange={setBrushSize}
         onNameEdit={setName}
         isConnected={isConnected}
+        rateLimits={rateLimits}
         onJumpTo={(x, y) => {
           if (!containerRef.current) return;
           const rect = containerRef.current.getBoundingClientRect();
@@ -923,8 +1019,11 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               screenY={screen.y}
               scale={scale}
               messageById={messageById}
+              replyCount={replyCounts.get(msg.id)}
+              depth={messageDepth.get(msg.id)}
               onReply={handleReply}
               onNavigateTo={handleNavigateToMessage}
+              onViewThread={handleViewThread}
               isHighlighted={msg.id === highlightedMessageId}
               zIndex={messageZIndexMap.get(msg.id) ?? 1}
             />
@@ -976,7 +1075,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               📍 {fmt(textInput.worldX)}, {fmt(textInput.worldY)}
             </div>
 
-            {/* Reply-to context banner */}
+            {/* Reply-to context banner with dismiss button */}
             {textInput.replyToId && (() => {
               const parent = messageById.get(textInput.replyToId);
               return parent ? (
@@ -986,8 +1085,30 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                     paddingLeft: 8,
                     marginBottom: 6,
                     opacity: 0.8,
+                    position: "relative",
                   }}
                 >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTextInput((prev) => ({ ...prev, replyToId: null }));
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: 0,
+                      background: "transparent",
+                      border: "none",
+                      color: "#888",
+                      fontSize: "1rem",
+                      cursor: "pointer",
+                      padding: "0 4px",
+                      lineHeight: 1,
+                    }}
+                    title="Clear reply"
+                  >
+                    ×
+                  </button>
                   <span style={{ color: parent.author_color, fontSize: "0.75rem", fontWeight: 600 }}>
                     ↩ Replying to {parent.author_name}
                   </span>
@@ -1035,7 +1156,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                 marginTop: 4,
               }}
             >
-              <span style={{ color: "#555", fontSize: "0.75rem" }}>
+              <span
+                style={{
+                  color: textInput.value.length >= 480 ? "#f87171" : textInput.value.length >= 400 ? "#fbbf24" : "#555",
+                  fontSize: "0.75rem",
+                }}
+              >
                 {textInput.value.length}/500
               </span>
               <div style={{ display: "flex", gap: 6 }}>
@@ -1057,13 +1183,14 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                 </button>
                 <button
                   onClick={() => submitMessage(textInput.value, textInput.worldX, textInput.worldY, textInput.replyToId)}
+                  disabled={!textInput.value.trim()}
                   style={{
-                    background: "#6366f1",
+                    background: !textInput.value.trim() ? "#444" : "#6366f1",
                     border: "none",
                     borderRadius: 6,
                     color: "#fff",
                     padding: "3px 10px",
-                    cursor: "pointer",
+                    cursor: textInput.value.trim() ? "pointer" : "not-allowed",
                     fontSize: "0.8rem",
                     fontWeight: 600,
                   }}
@@ -1108,6 +1235,20 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           zoom {(scale * 100).toFixed(0)}%
         </span>
       </div>
+
+      {/* Thread Panel */}
+      {threadMessage && (
+        <ThreadPanel
+          currentMessage={threadMessage}
+          messages={messages}
+          messageById={messageById}
+          onClose={() => setThreadMessage(null)}
+          onNavigateTo={handleNavigateToMessage}
+        />
+      )}
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

@@ -10,8 +10,11 @@ interface MessageCardProps {
   scale: number;
   /** O(1) id→message lookup map used for reply-parent resolution. */
   messageById?: Map<string, Message>;
+  replyCount?: number;
+  depth?: number;
   onReply?: (message: Message) => void;
   onNavigateTo?: (message: Message) => void;
+  onViewThread?: (message: Message) => void;
   isHighlighted?: boolean;
   /** Stacking order index (older = lower, newer = higher). Highlighted messages are boosted above all others. */
   zIndex?: number;
@@ -33,8 +36,11 @@ function MessageCard({
   screenY,
   scale,
   messageById,
+  replyCount = 0,
+  depth = 0,
   onReply,
   onNavigateTo,
+  onViewThread,
   isHighlighted,
   zIndex = 1,
 }: MessageCardProps) {
@@ -47,6 +53,13 @@ function MessageCard({
     : null;
   // True when this message references another but that message isn't available
   const replyMissing = !!message.reply_to_id && replyParent === null && messageById !== undefined;
+
+  // Thread depth indicator: thicker left border for deeper threads
+  const depthBorderWidth = Math.max(1, Math.min(depth, 5)) * 2;
+
+  // Has replies to show
+  const hasReplies = replyCount > 0;
+  const hasThread = replyParent || hasReplies;
 
   return (
     <div
@@ -62,6 +75,7 @@ function MessageCard({
         border: isHighlighted
           ? `1px solid ${message.author_color}`
           : `1px solid ${message.author_color}44`,
+        borderLeftWidth: isHighlighted ? depthBorderWidth + 1 : depthBorderWidth,
         borderRadius: Math.max(8 * scale, 6),
         padding: `${padding}px ${padding * 1.5}px`,
         backdropFilter: "blur(12px)",
@@ -72,7 +86,19 @@ function MessageCard({
         cursor: "default",
         userSelect: "text",
         zIndex: isHighlighted ? zIndex + 1000 : zIndex,
-        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease",
+      }}
+      onMouseOver={(e) => {
+        if (!isHighlighted) {
+          e.currentTarget.style.transform = "translate(-50%, -50%) scale(1.02)";
+          e.currentTarget.style.boxShadow = "0 8px 32px rgba(0,0,0,0.6), 0 0 0 2px " + message.author_color + "44";
+        }
+      }}
+      onMouseOut={(e) => {
+        if (!isHighlighted) {
+          e.currentTarget.style.transform = "translate(-50%, -50%) scale(1)";
+          e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px " + message.author_color + "22";
+        }
       }}
     >
       {/* Reply-to excerpt — clickable to navigate to the original message */}
@@ -183,28 +209,93 @@ function MessageCard({
           · {relativeTime(message.created_at)}
         </span>
 
-        {onReply && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onReply(message);
-            }}
+        {/* Reply count badge */}
+        {hasReplies && (
+          <span
             style={{
-              marginLeft: "auto",
-              background: "transparent",
-              border: "none",
-              color: "#555",
-              fontSize: Math.max(fontSize * 0.75, 8),
-              cursor: "pointer",
-              padding: "1px 4px",
-              borderRadius: 4,
-              flexShrink: 0,
+              background: `${message.author_color}22`,
+              border: `1px solid ${message.author_color}44`,
+              borderRadius: "10px",
+              padding: "1px 6px",
+              color: message.author_color,
+              fontSize: Math.max(fontSize * 0.7, 7),
+              fontWeight: 600,
             }}
-            title="Reply to this message"
+            title={`${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
           >
-            ↩
-          </button>
+            {replyCount}
+          </span>
         )}
+
+        {/* Action buttons */}
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            gap: "4px",
+            flexShrink: 0,
+          }}
+        >
+          {hasThread && onViewThread && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewThread(message);
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#555",
+                fontSize: Math.max(fontSize * 0.75, 8),
+                cursor: "pointer",
+                padding: "1px 4px",
+                borderRadius: 4,
+                flexShrink: 0,
+              }}
+              title="View thread"
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = `${message.author_color}22`;
+                e.currentTarget.style.color = message.author_color;
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#555";
+              }}
+            >
+              💬
+            </button>
+          )}
+
+          {onReply && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onReply(message);
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#555",
+                fontSize: Math.max(fontSize * 0.75, 8),
+                cursor: "pointer",
+                padding: "1px 4px",
+                borderRadius: 4,
+                flexShrink: 0,
+              }}
+              title="Reply to this message"
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = `${message.author_color}22`;
+                e.currentTarget.style.color = message.author_color;
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#555";
+              }}
+            >
+              ↩
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

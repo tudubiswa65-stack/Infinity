@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import { CanvasMode } from "@/hooks/useCanvas";
-import { Identity } from "@/types";
+import { Identity, RateLimitState } from "@/types";
 
 const COLOR_PALETTE = [
   "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7",
@@ -20,6 +20,7 @@ interface ToolbarProps {
   onNameEdit: (name: string) => void;
   isConnected: boolean;
   onJumpTo: (x: number, y: number) => void;
+  rateLimits?: RateLimitState;
 }
 
 const MODES: { key: CanvasMode; label: string; title: string }[] = [
@@ -45,6 +46,7 @@ export default function Toolbar({
   onNameEdit,
   isConnected,
   onJumpTo,
+  rateLimits,
 }: ToolbarProps) {
   const [coordInput, setCoordInput] = useState("");
   const [coordError, setCoordError] = useState(false);
@@ -66,6 +68,13 @@ export default function Toolbar({
     if (isNaN(x) || isNaN(y)) { setCoordError(true); return; }
     onJumpTo(x, y);
     setCoordInput("");
+  }
+
+  // Get countdown string for rate limit
+  function getCountdown(resetTime: number): string {
+    const seconds = Math.max(0, Math.ceil((resetTime - Date.now()) / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    return `${Math.floor(seconds / 60)}m`;
   }
 
   return (
@@ -240,6 +249,75 @@ export default function Toolbar({
           }}
           title={isConnected ? "Connected" : "Offline"}
         />
+
+        {/* Rate limit indicator */}
+        {rateLimits && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 8px",
+              background: "#1a1a1a",
+              borderRadius: 6,
+              border: "1px solid #2a2a2a",
+              fontSize: "0.75rem",
+            }}
+            title={`Messages: ${rateLimits.messages.remaining}/${rateLimits.messages.limit} · Strokes: ${rateLimits.strokes.remaining}/${rateLimits.strokes.limit}`}
+          >
+            {/* Message limit */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span style={{ color: "#666" }}>✏️</span>
+              <span
+                style={{
+                  color: rateLimits.messages.isLimited
+                    ? "#f87171"
+                    : rateLimits.messages.remaining <= 2
+                    ? "#fbbf24"
+                    : "#4ade80",
+                  fontWeight: rateLimits.messages.isLimited ? 600 : 400,
+                }}
+              >
+                {rateLimits.messages.isLimited
+                  ? getCountdown(rateLimits.messages.resetTime)
+                  : `${rateLimits.messages.remaining}`}
+              </span>
+            </div>
+
+            <span style={{ color: "#333" }}>|</span>
+
+            {/* Stroke limit */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span style={{ color: "#666" }}>🖊️</span>
+              <span
+                style={{
+                  color: rateLimits.strokes.isLimited
+                    ? "#f87171"
+                    : rateLimits.strokes.remaining <= 1
+                    ? "#fbbf24"
+                    : "#4ade80",
+                  fontWeight: rateLimits.strokes.isLimited ? 600 : 400,
+                }}
+              >
+                {rateLimits.strokes.isLimited
+                  ? getCountdown(rateLimits.strokes.resetTime)
+                  : `${rateLimits.strokes.remaining}`}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* User Identity */}
         {identity && (
