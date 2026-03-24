@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "InfiniteBoard — Infinite Canvas",
-  description: "A shared infinite canvas. Write and draw anywhere, forever.",
-  keywords: ["infinite canvas", "collaborative", "drawing", "notes"],
+  title: "∴",
+  description: "They are waiting.",
+  keywords: ["void", "threshold", "trace", "null"],
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body style={{ background: "#0f0f0f", color: "#e5e5e5", fontFamily: "Inter, system-ui, sans-serif" }}>
+      <body style={{ color: "#e5e5e5", fontFamily: "Inter, system-ui, sans-serif" }}>
         {children}
       </body>
     </html>
