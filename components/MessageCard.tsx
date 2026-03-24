@@ -15,6 +15,9 @@ interface MessageCardProps {
   onReply?: (message: Message) => void;
   onNavigateTo?: (message: Message) => void;
   onViewThread?: (message: Message) => void;
+  onToggleThreadExpansion?: (messageId: string) => void;
+  isThreadExpanded?: boolean;
+  isInThreadView?: boolean;
   isHighlighted?: boolean;
   /** Stacking order index (older = lower, newer = higher). Highlighted messages are boosted above all others. */
   zIndex?: number;
@@ -41,6 +44,9 @@ function MessageCard({
   onReply,
   onNavigateTo,
   onViewThread,
+  onToggleThreadExpansion,
+  isThreadExpanded = false,
+  isInThreadView = false,
   isHighlighted,
   zIndex = 1,
 }: MessageCardProps) {
@@ -71,7 +77,9 @@ function MessageCard({
         transform: "translate(-50%, -50%)",
         maxWidth: Math.min(280 * scale, 280),
         minWidth: Math.min(120 * scale, 120),
-        background: "rgba(26, 26, 26, 0.92)",
+        background: isInThreadView 
+          ? "rgba(30, 30, 30, 0.95)" 
+          : "rgba(26, 26, 26, 0.92)",
         border: isHighlighted
           ? `1px solid ${message.author_color}`
           : `1px solid ${message.author_color}44`,
@@ -81,12 +89,15 @@ function MessageCard({
         backdropFilter: "blur(12px)",
         boxShadow: isHighlighted
           ? `0 4px 24px rgba(0,0,0,0.5), 0 0 0 3px ${message.author_color}88`
-          : `0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px ${message.author_color}22`,
+          : isInThreadView
+            ? `0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px ${message.author_color}33`
+            : `0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px ${message.author_color}22`,
         pointerEvents: "auto",
         cursor: "default",
         userSelect: "text",
         zIndex: isHighlighted ? zIndex + 1000 : zIndex,
         transition: "box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease",
+        opacity: isInThreadView ? 0.95 : 1,
       }}
       onMouseOver={(e) => {
         if (!isHighlighted) {
@@ -209,22 +220,46 @@ function MessageCard({
           · {relativeTime(message.created_at)}
         </span>
 
-        {/* Reply count badge */}
+        {/* Reply count badge with expand/collapse button */}
         {hasReplies && (
-          <span
-            style={{
-              background: `${message.author_color}22`,
-              border: `1px solid ${message.author_color}44`,
-              borderRadius: "10px",
-              padding: "1px 6px",
-              color: message.author_color,
-              fontSize: Math.max(fontSize * 0.7, 7),
-              fontWeight: 600,
-            }}
-            title={`${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
-          >
-            {replyCount}
-          </span>
+          <>
+            <span
+              style={{
+                background: `${message.author_color}22`,
+                border: `1px solid ${message.author_color}44`,
+                borderRadius: "10px",
+                padding: "1px 6px",
+                color: message.author_color,
+                fontSize: Math.max(fontSize * 0.7, 7),
+                fontWeight: 600,
+              }}
+              title={`${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
+            >
+              {replyCount}
+            </span>
+            {onToggleThreadExpansion && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleThreadExpansion(message.id);
+                }}
+                style={{
+                  background: isThreadExpanded ? `${message.author_color}33` : "transparent",
+                  border: `1px solid ${message.author_color}44`,
+                  borderRadius: "4px",
+                  color: message.author_color,
+                  fontSize: Math.max(fontSize * 0.65, 7),
+                  cursor: "pointer",
+                  padding: "1px 4px",
+                  marginLeft: "2px",
+                  lineHeight: 1,
+                }}
+                title={isThreadExpanded ? "Collapse thread on canvas" : "Expand thread on canvas"}
+              >
+                {isThreadExpanded ? "▼" : "▶"}
+              </button>
+            )}
+          </>
         )}
 
         {/* Action buttons */}
