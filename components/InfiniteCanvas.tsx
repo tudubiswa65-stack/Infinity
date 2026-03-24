@@ -643,12 +643,19 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           currentStroke.current = [];
         } else {
           endPan();
-          // Tap (not drag, not pinch) in write mode → open message composer
+          // Tap (not drag, not pinch) in write mode → open message composer.
+          // Taps that originate from a message card (e.g. the Reply button) are
+          // ignored here so they don't also open a blank composer, mirroring the
+          // same guard that exists in handleMouseUp.
+          const onMessageCard = !!(e.target as HTMLElement).closest(
+            "[data-message-card]"
+          );
           if (
             !hasDragged.current &&
             !touchIsPinching.current &&
             m === "write" &&
-            e.changedTouches.length === 1
+            e.changedTouches.length === 1 &&
+            !onMessageCard
           ) {
             const touch = e.changedTouches[0];
             const screenX = touch.clientX;
