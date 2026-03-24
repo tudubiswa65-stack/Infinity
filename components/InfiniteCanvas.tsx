@@ -63,6 +63,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   const [isConnected, setIsConnected] = useState(false);
   const [dbAvailable, setDbAvailable] = useState(true);
   const [threadMessage, setThreadMessage] = useState<Message | null>(null);
+  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
 
   // Map each message id to a stacking index (oldest = 1, newest = N) so newer
   // messages always render on top when they overlap with older ones.
@@ -125,6 +126,60 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     () => messages.filter((msg) => msg.reply_to_id),
     [messages]
   );
+
+  // Thread expansion: compute positions for replies when a thread is expanded
+  const threadLayout = useMemo(() => {
+    const layout = new Map<string, { 
+      parentId: string; 
+      index: number; 
+      computedX: number; 
+      computedY: number;
+    }>();
+    
+    expandedThreads.forEach(parentId => {
+      const parent = messageById.get(parentId);
+      if (!parent) return;
+      
+      // Find all direct replies to this parent
+      const replies = messages
+        .filter(m => m.reply_to_id === parentId)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      // Stack replies vertically below parent with offset
+      const STACK_OFFSET_X = 30;
+      const STACK_OFFSET_Y = 60;
+      const REPLY_SPACING = 70;
+      
+      replies.forEach((reply, index) => {
+        layout.set(reply.id, {
+          parentId,
+          index,
+          computedX: parent.coord_x + STACK_OFFSET_X,
+          computedY: parent.coord_y + STACK_OFFSET_Y + (index * REPLY_SPACING),
+        });
+      });
+    });
+    
+    return layout;
+  }, [expandedThreads, messages, messageById]);
+
+  // Toggle thread expansion for a specific message
+  const toggleThreadExpansion = useCallback((messageId: string) => {
+    setExpandedThreads(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Check if a thread is expanded
+  const isThreadExpanded = useCallback((messageId: string) => {
+    return expandedThreads.has(messageId);
+  }, [expandedThreads]);
 
   // Cursor world position for the coordinate HUD
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
@@ -986,7 +1041,9 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             overflow: "visible",
           }}
         >
+          {/* Regular thread connectors for non-expanded threads */}
           {replyMessages
+            .filter(msg => !threadLayout.has(msg.id))
             .map((msg) => {
               const parent = msg.reply_to_id ? messageById.get(msg.reply_to_id) : undefined;
               if (!parent) return null;
@@ -1006,11 +1063,61 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                 />
               );
             })}
+          
+          {/* Enhanced connectors for expanded thread views */}
+          {Array.from(threadLayout.entries()).map(([replyId, layout]) => {
+            const reply = messageById.get(replyId);
+            const parent = messageById.get(layout.parentId);
+            if (!reply || !parent) return null;
+            
+            const replyScreen = worldToScreen(layout.computedX, layout.computedY);
+            const parentScreen = worldToScreen(parent.coord_x, parent.coord_y);
+            
+            return (
+              <g key={`expanded-thread-${replyId}`}>
+                {/* Thread hub dot on parent */}
+                <circle
+                  cx={parentScreen.x}
+                  cy={parentScreen.y + 30}
+                  r={4}
+                  fill={parent.author_color}
+                  opacity={0.8}
+                />
+                {/* Solid connection line from parent to reply */}
+                <path
+                  d={`M ${parentScreen.x} ${parentScreen.y + 34} 
+                      C ${parentScreen.x} ${parentScreen.y + 60}, 
+                        ${replyScreen.x - 20} ${parentScreen.y + 60}, 
+                        ${replyScreen.x - 15} ${replyScreen.y - 30}`}
+                  stroke={parent.author_color}
+                  strokeWidth={2}
+                  fill="none"
+                  opacity={0.6}
+                />
+                {/* Connection dot on reply */}
+                <circle
+                  cx={replyScreen.x - 15}
+                  cy={replyScreen.y - 30}
+                  r={4}
+                  fill={parent.author_color}
+                  opacity={0.8}
+                />
+              </g>
+            );
+          })}
         </svg>
 
         {/* Messages — newer messages receive a higher z-index so they always appear on top */}
         {messages.map((msg) => {
-          const screen = worldToScreen(msg.coord_x, msg.coord_y);
+          // Check if this message is being displayed as part of an expanded thread
+          const threadPos = threadLayout.get(msg.id);
+          const isInThreadView = !!threadPos;
+          
+          // Use computed position if in thread view, otherwise use stored coordinates
+          const worldX = threadPos?.computedX ?? msg.coord_x;
+          const worldY = threadPos?.computedY ?? msg.coord_y;
+          
+          const screen = worldToScreen(worldX, worldY);
           return (
             <MessageCard
               key={msg.id}
@@ -1024,6 +1131,9 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               onReply={handleReply}
               onNavigateTo={handleNavigateToMessage}
               onViewThread={handleViewThread}
+              onToggleThreadExpansion={() => toggleThreadExpansion(msg.id)}
+              isThreadExpanded={expandedThreads.has(msg.id)}
+              isInThreadView={isInThreadView}
               isHighlighted={msg.id === highlightedMessageId}
               zIndex={messageZIndexMap.get(msg.id) ?? 1}
             />
