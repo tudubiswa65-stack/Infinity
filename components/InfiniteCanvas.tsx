@@ -69,7 +69,8 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   const [isConnected, setIsConnected] = useState(false);
   const [dbAvailable, setDbAvailable] = useState(true);
   const [threadMessage, setThreadMessage] = useState<Message | null>(null);
-  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
+  // Tracks threads the user has manually collapsed; all other threads with replies are auto-expanded.
+  const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());
 
   // Map each message id to a stacking index (oldest = 1, newest = N) so newer
   // messages always render on top when they overlap with older ones.
@@ -133,6 +134,24 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     [messages]
   );
 
+  // Set of all message IDs that have at least one reply — threads auto-expand by default.
+  const allParentIds = useMemo(() => {
+    const parents = new Set<string>();
+    messages.forEach((m) => {
+      if (m.reply_to_id) parents.add(m.reply_to_id);
+    });
+    return parents;
+  }, [messages]);
+
+  // A thread is expanded when it has replies and the user has not manually collapsed it.
+  const expandedThreads = useMemo(() => {
+    const result = new Set<string>();
+    allParentIds.forEach((id) => {
+      if (!collapsedThreads.has(id)) result.add(id);
+    });
+    return result;
+  }, [allParentIds, collapsedThreads]);
+
   // Thread expansion: compute positions for replies when a thread is expanded
   const threadLayout = useMemo(() => {
     const layout = new Map<string, { 
@@ -165,23 +184,19 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     return layout;
   }, [expandedThreads, messages, messageById]);
 
-  // Toggle thread expansion for a specific message
+  // Toggle thread expansion for a specific message.
+  // Collapsed threads are tracked separately; expanded state is auto-derived from reply presence.
   const toggleThreadExpansion = useCallback((messageId: string) => {
-    setExpandedThreads(prev => {
+    setCollapsedThreads(prev => {
       const next = new Set(prev);
       if (next.has(messageId)) {
-        next.delete(messageId);
+        next.delete(messageId); // re-expand
       } else {
-        next.add(messageId);
+        next.add(messageId); // collapse
       }
       return next;
     });
   }, []);
-
-  // Check if a thread is expanded
-  const isThreadExpanded = useCallback((messageId: string) => {
-    return expandedThreads.has(messageId);
-  }, [expandedThreads]);
 
   // Cursor world position for the coordinate HUD
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
@@ -485,10 +500,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       if (res.ok) {
         updateFromResponse("messages", res.headers);
         success("Message posted");
-        // Auto-expand the parent thread so the new reply is immediately visible below
-        if (replyToId) {
-          setExpandedThreads((prev) => new Set([...prev, replyToId]));
-        }
         fetchData(true);
       } else if (res.status === 429) {
         handleRateLimitError("messages", res.headers);
