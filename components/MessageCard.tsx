@@ -49,6 +49,7 @@ function MessageCard({
 
   return (
     <div
+      data-message-card="true"
       style={{
         position: "absolute",
         left: screenX,

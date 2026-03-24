@@ -66,6 +66,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     return new Map(sorted.map((m, i) => [m.id, i + 1]));
   }, [messages]);
 
+  // O(1) id-to-message lookup used for thread connectors and reply excerpts.
+  const messageById = useMemo(
+    () => new Map(messages.map((m) => [m.id, m])),
+    [messages]
+  );
+
   // Cursor world position for the coordinate HUD
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
 
@@ -487,8 +493,14 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       } else {
         // write mode
         endPan();
-        // If it was a click (not a drag), show text input
-        if (!hasDragged.current && e.button === 0) {
+        // If it was a click (not a drag) on the empty canvas, show text input.
+        // Clicks that originate from a message card are ignored here so that
+        // interacting with a card (including pressing Reply) does not also open
+        // a new blank text input that would override the reply context.
+        const onMessageCard = !!(e.target as HTMLElement).closest(
+          "[data-message-card]"
+        );
+        if (!hasDragged.current && e.button === 0 && !onMessageCard) {
           const screenX = e.clientX;
           const screenY = e.clientY - TOOLBAR_HEIGHT;
           const world = screenToWorld(screenX, screenY);
@@ -850,6 +862,41 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#dots)" />
+        </svg>
+
+        {/* Thread connectors — draw a dashed line from each reply message back to its parent */}
+        <svg
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+            overflow: "visible",
+          }}
+        >
+          {messages
+            .filter((msg) => msg.reply_to_id)
+            .map((msg) => {
+              const parent = msg.reply_to_id ? messageById.get(msg.reply_to_id) : undefined;
+              if (!parent) return null;
+              const msgScreen = worldToScreen(msg.coord_x, msg.coord_y);
+              const parentScreen = worldToScreen(parent.coord_x, parent.coord_y);
+              return (
+                <line
+                  key={`thread-${msg.id}`}
+                  x1={parentScreen.x}
+                  y1={parentScreen.y}
+                  x2={msgScreen.x}
+                  y2={msgScreen.y}
+                  stroke={parent.author_color}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  opacity={0.35}
+                />
+              );
+            })}
         </svg>
 
         {/* Messages — newer messages receive a higher z-index so they always appear on top */}
