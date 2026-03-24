@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabase";
 import { messageLimiter } from "@/lib/redis";
-import { getClientIp } from "@/lib/getClientIp";
 
 export async function GET(request: NextRequest) {
   const supabase = createSupabaseClient("anon");
@@ -39,17 +38,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Valid X-User-Id header required" }, { status: 400 });
   }
 
-  // Rate limiting — keyed by IP so each device is limited independently
+  // Rate limiting — keyed by userId so each user is limited independently
+  let rateLimitResult = null;
   if (messageLimiter) {
-    const ip = getClientIp(request);
-    const result = await messageLimiter.limit(ip);
-    if (!result.success) {
+    rateLimitResult = await messageLimiter.limit(userId);
+    if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Max 10 messages per minute." },
         {
           status: 429,
           headers: {
-            "Retry-After": String(Math.ceil((result.reset - Date.now()) / 1000)),
+            "Retry-After": String(Math.ceil((rateLimitResult.reset - Date.now()) / 1000)),
+            "RateLimit-Limit": "10",
+            "RateLimit-Remaining": "0",
+            "RateLimit-Reset": String(Math.ceil(rateLimitResult.reset / 1000)),
           },
         }
       );
@@ -124,5 +126,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ message: data }, { status: 201 });
+  // Return response with rate limit headers
+  const headers: Record<string, string> = {};
+  if (rateLimitResult) {
+    headers["RateLimit-Limit"] = "10";
+    headers["RateLimit-Remaining"] = String(rateLimitResult.remaining);
+    headers["RateLimit-Reset"] = String(Math.ceil(rateLimitResult.reset / 1000));
+  }
+
+  return NextResponse.json({ message: data }, { status: 201, headers });
 }

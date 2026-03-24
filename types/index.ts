@@ -9,6 +9,8 @@ export interface Message {
   content: string;
   created_at: string;
   reply_to_id?: string | null;
+  reply_count?: number | null;
+  depth?: number | null;
 }
 
 export interface Stroke {
@@ -25,4 +27,25 @@ export interface Identity {
   uid: string;
   name: string;
   color: string;
+}
+
+export type ToastSeverity = "success" | "error" | "warning" | "info";
+
+export interface Toast {
+  id: string;
+  message: string;
+  severity: ToastSeverity;
+  duration?: number;
+}
+
+export interface RateLimitStatus {
+  limit: number;
+  remaining: number;
+  resetTime: number;
+  isLimited: boolean;
+}
+
+export interface RateLimitState {
+  messages: RateLimitStatus;
+  strokes: RateLimitStatus;
 }
