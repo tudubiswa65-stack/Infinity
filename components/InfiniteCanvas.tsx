@@ -179,14 +179,23 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       computedX: number; 
       computedY: number;
     }>();
+
+    // Build reply map in a single O(n) pass to avoid O(parents × messages) filtering.
+    const repliesByParent = new Map<string, Message[]>();
+    messages.forEach(m => {
+      if (m.reply_to_id) {
+        const arr = repliesByParent.get(m.reply_to_id);
+        if (arr) arr.push(m);
+        else repliesByParent.set(m.reply_to_id, [m]);
+      }
+    });
     
     expandedThreads.forEach(parentId => {
       const parent = messageById.get(parentId);
       if (!parent) return;
       
-      // Find all direct replies to this parent
-      const replies = messages
-        .filter(m => m.reply_to_id === parentId)
+      // Look up pre-grouped replies directly instead of scanning all messages.
+      const replies = (repliesByParent.get(parentId) ?? [])
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       // Fan replies outward in multiple directions from the parent.
@@ -471,7 +480,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       if (res.ok) {
         updateFromResponse("strokes", res.headers);
         success("Stroke posted");
-        fetchData(true);
+        const data = await res.json() as { stroke: Stroke };
+        const newStroke = data.stroke;
+        if (newStroke && !strokeIdsRef.current.has(newStroke.id)) {
+          strokeIdsRef.current.add(newStroke.id);
+          setStrokes((prev) => [newStroke, ...prev]);
+        }
       } else if (res.status === 429) {
         handleRateLimitError("strokes", res.headers);
         const data = await res.json() as { error: string };
@@ -483,7 +497,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     } catch {
       showError("Network error. Please try again.");
     }
-  }, [fetchData, checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
+  }, [checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
 
   // Submit a text message
   const submitMessage = useCallback(async (
@@ -523,7 +537,12 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       if (res.ok) {
         updateFromResponse("messages", res.headers);
         success("Message posted");
-        fetchData(true);
+        const data = await res.json() as { message: Message };
+        const newMessage = data.message;
+        if (newMessage && !messageIdsRef.current.has(newMessage.id)) {
+          messageIdsRef.current.add(newMessage.id);
+          setMessages((prev) => [newMessage, ...prev]);
+        }
       } else if (res.status === 429) {
         handleRateLimitError("messages", res.headers);
         const data = await res.json() as { error: string };
@@ -535,7 +554,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     } catch {
       showError("Network error. Please try again.");
     }
-  }, [fetchData, checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
+  }, [checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
 
   // Space key handling — enables temporary pan in any mode
   useEffect(() => {
