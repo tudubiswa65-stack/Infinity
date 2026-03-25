@@ -75,14 +75,24 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
     };
   })();
 
-  function formatTime(dateStr: string): string {
+  function formatDateTime(dateStr: string): string {
+    return new Date(dateStr).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function relativeTime(dateStr: string): string {
     const now = Date.now();
     const then = new Date(dateStr).getTime();
     const diff = Math.floor((now - then) / 1000);
     if (diff < 60) return "just now";
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${new Date(dateStr).toLocaleDateString()}`;
+    return `${Math.floor(diff / 86400)}d ago`;
   }
 
   function renderAncestorMessage(msg: Message, isCurrent: boolean) {
@@ -160,8 +170,8 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
                 Current
               </span>
             )}
-            <span style={{ color: "#666", fontSize: "0.75rem", marginLeft: "auto" }}>
-              {formatTime(msg.created_at)}
+            <span style={{ color: "#666", fontSize: "0.75rem", marginLeft: "auto" }} title={relativeTime(msg.created_at)}>
+              {formatDateTime(msg.created_at)}
             </span>
           </div>
           <p
@@ -298,8 +308,8 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
                     >
                       {node.msg.author_name}
                     </span>
-                    <span style={{ color: "#555", fontSize: "0.75rem" }}>
-                      {formatTime(node.msg.created_at)}
+                    <span style={{ color: "#555", fontSize: "0.75rem" }} title={relativeTime(node.msg.created_at)}>
+                      {formatDateTime(node.msg.created_at)}
                     </span>
                   </div>
                   <p

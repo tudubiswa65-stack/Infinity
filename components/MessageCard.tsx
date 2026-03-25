@@ -33,6 +33,16 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+function formatDateTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function MessageCard({
   message,
   screenX,
@@ -216,8 +226,14 @@ function MessageCard({
         >
           {message.author_name}
         </span>
-        <span style={{ color: "#555", fontSize: Math.max(fontSize * 0.75, 8) }}>
+        <span
+          style={{ color: "#555", fontSize: Math.max(fontSize * 0.75, 8) }}
+          title={formatDateTime(message.created_at)}
+        >
           · {relativeTime(message.created_at)}
+        </span>
+        <span style={{ color: "#444", fontSize: Math.max(fontSize * 0.7, 7) }}>
+          · {formatDateTime(message.created_at)}
         </span>
 
         {/* Reply count badge with expand/collapse button */}
