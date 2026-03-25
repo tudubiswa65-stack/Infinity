@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Infinity — Infinite Canvas",
   description: "Write, draw and collaborate on an infinite shared canvas. Every trace lasts forever.",
   keywords: ["infinite canvas", "collaborative", "drawing", "writing", "real-time"],
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
