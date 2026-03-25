@@ -1,60 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
 import StarField from "@/components/hero/StarField";
 import FogLayer from "@/components/hero/FogLayer";
 import FloatingGlyphs from "@/components/hero/FloatingGlyphs";
 
-// Cryptic rotating fragments shown beneath the sigil
-const CRYPTIC_FRAGMENTS = [
-  "∂ₓ · Ω ≠ ∅",
-  "0x1F → ∞",
-  "7743 ∴ ?",
-  "NaN ∈ [∅,∞)",
-  "Ψ² − Δθ = §",
-  "αβγ · ⌖ · dt⁻¹",
-  "∑ₙ≥0 ⊕ ◈",
-  "⟦ ∴ ⟧ ≈ ∞",
-  "Λ · Φ · Ξ",
-  "???.?? ∵ ???.??",
-];
-
 export default function Dashboard() {
   const router = useRouter();
-  const [coords, setCoords] = useState({ x: "???.??", y: "???.??" });
-  const [hasInteracted, setHasInteracted] = useState(false);
-  const [fragment, setFragment] = useState(CRYPTIC_FRAGMENTS[0]);
-  const fragmentIdx = useRef(0);
-
-  // Rotate cryptic fragments
-  useEffect(() => {
-    const id = setInterval(() => {
-      fragmentIdx.current = (fragmentIdx.current + 1) % CRYPTIC_FRAGMENTS.length;
-      setFragment(CRYPTIC_FRAGMENTS[fragmentIdx.current]);
-    }, 3200);
-    return () => clearInterval(id);
-  }, []);
-
-  // Track cursor → show as raw numbers, no label
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth) * 100;
-      const y = (e.clientY / window.innerHeight) * 100;
-      document.documentElement.style.setProperty("--mouse-x", `${x}%`);
-      document.documentElement.style.setProperty("--mouse-y", `${y}%`);
-
-      setCoords({
-        x: x.toFixed(2).padStart(6, "0"),
-        y: y.toFixed(2).padStart(6, "0"),
-      });
-
-      if (!hasInteracted) setHasInteracted(true);
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [hasInteracted]);
 
   return (
     <main className="hero-container" style={{ background: "#050505" }}>
@@ -84,20 +36,6 @@ export default function Dashboard() {
           50%  { transform: rotate(180deg) scale(1.04); }
           100% { transform: rotate(360deg) scale(1); }
         }
-        @keyframes fragment-swap {
-          0%   { opacity: 0; transform: translateY(4px); }
-          15%  { opacity: 1; transform: translateY(0); }
-          85%  { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(-4px); }
-        }
-        @keyframes noise-flicker {
-          0%, 100% { opacity: 1; }
-          92%      { opacity: 1; }
-          93%      { opacity: 0.4; }
-          94%      { opacity: 1; }
-          97%      { opacity: 0.7; }
-          98%      { opacity: 1; }
-        }
         .sigil-symbol {
           animation: sigil-pulse 5s ease-in-out infinite;
         }
@@ -110,25 +48,6 @@ export default function Dashboard() {
         .sigil-ring-3 {
           animation: ring-mid 38s ease-in-out infinite;
         }
-        .cryptic-fragment {
-          animation: fragment-swap 3.2s ease-in-out infinite;
-          font-family: 'SF Mono', 'Fira Code', monospace;
-          font-size: 0.7rem;
-          letter-spacing: 0.28em;
-        }
-        .coords-display {
-          font-family: 'SF Mono', 'Fira Code', monospace;
-          font-size: 0.7rem;
-          letter-spacing: 0.25em;
-          transition: color 0.4s ease;
-          animation: noise-flicker 8s ease-in-out infinite;
-        }
-        .hero-label {
-          font-family: 'SF Mono', 'Fira Code', monospace;
-          font-size: 0.6rem;
-          letter-spacing: 0.55em;
-          animation: noise-flicker 12s ease-in-out infinite;
-        }
       `}</style>
 
       <StarField />
@@ -136,7 +55,7 @@ export default function Dashboard() {
       <FloatingGlyphs />
 
       <div className="hero-content">
-        {/* ── Animated sigil (three rings + symbol) ── */}
+        {/* ── Animated sigil (three rings + logo symbol) ── */}
         <div
           className="fade-in"
           style={{
@@ -182,7 +101,7 @@ export default function Dashboard() {
                 borderBottomColor: "rgba(139,92,246,0.5)",
               }}
             />
-            {/* Central symbol — ∞ */}
+            {/* Central symbol — ∞ logo */}
             <div
               className="sigil-symbol"
               style={{
@@ -202,24 +121,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Anonymous identifier ── */}
+        {/* ── Brand label ── */}
         <div
           className="fade-in"
           style={{ animationDelay: "0.3s", opacity: 0, marginBottom: "0.75rem" }}
         >
           <span
-            className="hero-label"
             style={{
+              fontFamily: "'SF Mono', 'Fira Code', monospace",
+              fontSize: "0.6rem",
+              letterSpacing: "0.55em",
               fontWeight: 500,
               color: "rgba(99,102,241,0.55)",
               textTransform: "uppercase",
             }}
           >
-            ∅ · Ω · ∞ · § · ?
+            InfiniteBoard · v3
           </span>
         </div>
 
-        {/* ── Cryptic headline ── */}
+        {/* ── Headline ── */}
         <h1
           className="hero-title fade-in"
           style={{
@@ -231,13 +152,12 @@ export default function Dashboard() {
             textTransform: "none",
             marginBottom: "1.1rem",
             lineHeight: 1.2,
-            fontFamily: "'SF Mono', 'Fira Code', monospace",
           }}
         >
-          ∴ &nbsp; unknown &nbsp; ∴
+          Write. Draw. Explore.
         </h1>
 
-        {/* ── Rotating cryptic fragments ── */}
+        {/* ── Subtitle ── */}
         <div
           className="fade-in"
           style={{
@@ -251,15 +171,18 @@ export default function Dashboard() {
           }}
         >
           <span
-            key={fragment}
-            className="cryptic-fragment"
-            style={{ color: "rgba(139,92,246,0.45)" }}
+            style={{
+              fontFamily: "'SF Mono', 'Fira Code', monospace",
+              fontSize: "0.7rem",
+              letterSpacing: "0.15em",
+              color: "rgba(139,92,246,0.55)",
+            }}
           >
-            {fragment}
+            An infinite canvas for everyone
           </span>
         </div>
 
-        {/* ── CTA — opaque symbol button ── */}
+        {/* ── CTA button ── */}
         <div
           className="fade-in"
           style={{ animationDelay: "1s", opacity: 0, marginBottom: "2rem" }}
@@ -267,28 +190,10 @@ export default function Dashboard() {
           <button
             className="hero-enter-btn"
             onClick={() => router.push("/canvas")}
-            title="▶"
-            aria-label="Enter"
+            aria-label="Enter Canvas"
           >
-            ▶&ensp;∞
+            Enter Canvas
           </button>
-        </div>
-
-        {/* ── Raw coordinate stream ── */}
-        <div
-          className="fade-in"
-          style={{ animationDelay: "1.4s", opacity: 0, marginTop: "2.5rem" }}
-        >
-          <p
-            className="coords-display"
-            style={{
-              color: hasInteracted
-                ? "rgba(99,102,241,0.4)"
-                : "rgba(80,80,100,0.35)",
-            }}
-          >
-            {coords.x}&nbsp;∴&nbsp;{coords.y}
-          </p>
         </div>
       </div>
 
@@ -296,7 +201,7 @@ export default function Dashboard() {
       <div
         className="hero-footer fade-in"
         style={{
-          animationDelay: "1.8s",
+          animationDelay: "1.4s",
           opacity: 0,
           color: "rgba(255,255,255,0.15)",
           letterSpacing: "0.5em",
@@ -306,7 +211,7 @@ export default function Dashboard() {
           bottom: "2.5rem",
         }}
       >
-        ∅ &nbsp; · &nbsp; Ω &nbsp; · &nbsp; ∞ &nbsp; · &nbsp; §
+        InfiniteBoard
       </div>
     </main>
   );

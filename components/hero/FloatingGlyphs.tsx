@@ -2,22 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-const GLYPHS = [
-  "∞", "∅", "Ω", "Ψ", "Σ", "Δ", "Λ", "Φ", "Θ", "Ξ",
-  "⊕", "⊗", "∴", "∵", "≈", "≠", "∈", "∉", "⊂", "⊄",
-  "α", "β", "γ", "δ", "ε", "ζ", "η", "ι", "κ", "λ",
-  "§", "¶", "†", "‡", "※", "‰", "℃", "℉", "№", "℗",
-  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-  "⌖", "⌗", "⌘", "⌛", "⌜", "⌝", "⌞", "⌟",
-  "▲", "▼", "◆", "●", "■", "▸", "◂", "◈",
-  "⟨", "⟩", "⟦", "⟧", "⟮", "⟯",
-  "?", "!", "#", "@", "%", "&", "*",
-  "7743", "∞²", "0x0F", "NaN", "∂ₓ", "dt⁻¹",
-  "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹",
-];
-
-interface Glyph {
-  el: HTMLSpanElement;
+interface Particle {
+  el: HTMLDivElement;
   x: number;
   y: number;
   vx: number;
@@ -29,7 +15,7 @@ interface Glyph {
 export default function FloatingGlyphs() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
-  const glyphsRef = useRef<Glyph[]>([]);
+  const glyphsRef = useRef<Particle[]>([]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -39,20 +25,17 @@ export default function FloatingGlyphs() {
 
     function spawnGlyph() {
       if (!container) return;
-      const text = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
-      const el = document.createElement("span");
-      el.textContent = text;
-      const size = 0.55 + Math.random() * 0.65;
+      const el = document.createElement("div");
+      const size = 2 + Math.random() * 3;
       const opacity = 0.08 + Math.random() * 0.18;
       const hue = Math.random() < 0.6 ? "rgba(99,102,241," : "rgba(139,92,246,";
       el.style.cssText = `
         position: absolute;
-        font-size: ${size}rem;
-        color: ${hue}${opacity});
-        font-family: 'SF Mono', 'Fira Code', monospace;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        background: ${hue}${opacity});
         pointer-events: none;
-        user-select: none;
-        white-space: nowrap;
         will-change: transform, opacity;
         transition: opacity 1.8s ease;
         opacity: 0;
@@ -64,7 +47,7 @@ export default function FloatingGlyphs() {
       container.appendChild(el);
 
       const maxLife = 6000 + Math.random() * 10000;
-      const glyph: Glyph = {
+      const particle: Particle = {
         el,
         x,
         y,
@@ -73,7 +56,7 @@ export default function FloatingGlyphs() {
         life: 0,
         maxLife,
       };
-      glyphsRef.current.push(glyph);
+      glyphsRef.current.push(particle);
 
       // Fade in
       requestAnimationFrame(() => {
@@ -87,7 +70,7 @@ export default function FloatingGlyphs() {
       const dt = now - last;
       last = now;
 
-      // Spawn new glyphs
+      // Spawn new particles
       if (glyphsRef.current.length < MAX_GLYPHS && Math.random() < 0.04) {
         spawnGlyph();
       }
@@ -114,7 +97,7 @@ export default function FloatingGlyphs() {
       animRef.current = requestAnimationFrame(tick);
     }
 
-    // Seed initial glyphs
+    // Seed initial particles
     for (let count = 0; count < 16; count++) spawnGlyph();
 
     animRef.current = requestAnimationFrame(tick);
