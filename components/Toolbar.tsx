@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, memo } from "react";
 import { CanvasMode } from "@/hooks/useCanvas";
 import { Identity, RateLimitState } from "@/types";
 
@@ -35,7 +35,7 @@ const MODE_HINTS: Record<CanvasMode, string> = {
   pan:   "Drag to pan · Scroll to zoom",
 };
 
-export default function Toolbar({
+function Toolbar({
   identity,
   mode,
   onModeChange,
@@ -471,3 +471,5 @@ export default function Toolbar({
     </div>
   );
 }
+
+export default memo(Toolbar);
