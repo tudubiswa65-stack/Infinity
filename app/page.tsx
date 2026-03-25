@@ -1,15 +1,56 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import StarField from "@/components/hero/StarField";
 import FogLayer from "@/components/hero/FogLayer";
 import FloatingGlyphs from "@/components/hero/FloatingGlyphs";
 
+const CORE_SYMBOLS = ["⌬", "⊘", "Ξ", "∞", "Ψ", "Ω", "⚛", "∆", "⌀", "⍟"];
+
+const GLITCH_BASE_DURATION = 250;
+const GLITCH_RANDOM_DURATION = 100;
+const GLITCH_MIN_INTERVAL = 2500;
+const GLITCH_INTERVAL_RANGE = 5500;
+
 export default function Dashboard() {
   const router = useRouter();
+  const coreRef = useRef<HTMLDivElement>(null);
+  const symbolRef = useRef<HTMLSpanElement>(null);
+  const symIdxRef = useRef(0);
+
+  // Glitch + symbol cycling effect
+  useEffect(() => {
+    const core = coreRef.current;
+    const sym = symbolRef.current;
+    if (!core || !sym) return;
+
+    let glitchTimer: ReturnType<typeof setTimeout>;
+
+    function triggerGlitch() {
+      if (!core || !sym) return;
+      core.classList.add("core-glitch");
+      symIdxRef.current = (symIdxRef.current + 1) % CORE_SYMBOLS.length;
+      sym.textContent = CORE_SYMBOLS[symIdxRef.current];
+      setTimeout(() => core?.classList.remove("core-glitch"), GLITCH_BASE_DURATION + Math.random() * GLITCH_RANDOM_DURATION);
+      glitchTimer = setTimeout(triggerGlitch, GLITCH_MIN_INTERVAL + Math.random() * GLITCH_INTERVAL_RANGE);
+    }
+
+    glitchTimer = setTimeout(triggerGlitch, 3000);
+    return () => clearTimeout(glitchTimer);
+  }, []);
+
+  // Dispatch alignment event on any tap/click
+  const handleInteraction = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("hero:align"));
+  }, []);
 
   return (
-    <main className="hero-container" style={{ background: "#050505" }}>
+    <main
+      className="hero-container"
+      onClick={handleInteraction}
+      style={{ background: "#050505", cursor: "crosshair" }}
+    >
       <style>{`
         @keyframes sigil-pulse {
           0%, 100% {
@@ -36,6 +77,19 @@ export default function Dashboard() {
           50%  { transform: rotate(180deg) scale(1.04); }
           100% { transform: rotate(360deg) scale(1); }
         }
+        @keyframes core-glitch-anim {
+          0%   { transform: translate(0, 0) skewX(0deg);   opacity: 0.6; }
+          15%  { transform: translate(-5px, 2px) skewX(-3deg); opacity: 1;   }
+          30%  { transform: translate(5px, -2px) skewX(3deg);  opacity: 0.3; }
+          45%  { transform: translate(-3px, 0) skewX(0deg); opacity: 0.9; }
+          60%  { transform: translate(3px, 2px) skewX(2deg);  opacity: 0.6; }
+          75%  { transform: translate(-2px, -1px) skewX(-1deg); opacity: 1; }
+          90%  { transform: translate(2px, 0) skewX(0deg); opacity: 0.7; }
+          100% { transform: translate(0, 0) skewX(0deg);   opacity: 0.6; }
+        }
+        .core-glitch {
+          animation: core-glitch-anim 0.28s steps(1) forwards !important;
+        }
         .sigil-symbol {
           animation: sigil-pulse 5s ease-in-out infinite;
         }
@@ -55,7 +109,7 @@ export default function Dashboard() {
       <FloatingGlyphs />
 
       <div className="hero-content">
-        {/* ── Animated sigil (three rings + logo symbol) ── */}
+        {/* ── Animated sigil (three rings + glitching symbol cluster) ── */}
         <div
           className="fade-in"
           style={{
@@ -67,7 +121,7 @@ export default function Dashboard() {
             alignItems: "center",
           }}
         >
-          <div style={{ position: "relative", width: 130, height: 130 }}>
+          <div ref={coreRef} style={{ position: "relative", width: 130, height: 130 }}>
             {/* Outer rotating ring */}
             <div
               className="sigil-ring-1"
@@ -101,7 +155,7 @@ export default function Dashboard() {
                 borderBottomColor: "rgba(139,92,246,0.5)",
               }}
             />
-            {/* Central symbol — ∞ logo */}
+            {/* Central glitching symbol */}
             <div
               className="sigil-symbol"
               style={{
@@ -116,102 +170,27 @@ export default function Dashboard() {
                 lineHeight: 1,
               }}
             >
-              ∞
+              <span ref={symbolRef}>⌬</span>
             </div>
           </div>
         </div>
 
-        {/* ── Brand label ── */}
+        {/* ── Cryptic CTA — fades in after delay ── */}
         <div
           className="fade-in"
-          style={{ animationDelay: "0.3s", opacity: 0, marginBottom: "0.75rem" }}
-        >
-          <span
-            style={{
-              fontFamily: "'SF Mono', 'Fira Code', monospace",
-              fontSize: "0.6rem",
-              letterSpacing: "0.55em",
-              fontWeight: 500,
-              color: "rgba(99,102,241,0.55)",
-              textTransform: "uppercase",
-            }}
-          >
-            InfiniteBoard · v3
-          </span>
-        </div>
-
-        {/* ── Headline ── */}
-        <h1
-          className="hero-title fade-in"
-          style={{
-            animationDelay: "0.5s",
-            opacity: 0,
-            fontSize: "clamp(1.6rem, 4vw, 2.8rem)",
-            letterSpacing: "0.08em",
-            fontWeight: 300,
-            textTransform: "none",
-            marginBottom: "1.1rem",
-            lineHeight: 1.2,
-          }}
-        >
-          Write. Draw. Explore.
-        </h1>
-
-        {/* ── Subtitle ── */}
-        <div
-          className="fade-in"
-          style={{
-            animationDelay: "0.7s",
-            opacity: 0,
-            margin: "0 auto 3rem",
-            height: "1.6rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "'SF Mono', 'Fira Code', monospace",
-              fontSize: "0.7rem",
-              letterSpacing: "0.15em",
-              color: "rgba(139,92,246,0.55)",
-            }}
-          >
-            An infinite canvas for everyone
-          </span>
-        </div>
-
-        {/* ── CTA button ── */}
-        <div
-          className="fade-in"
-          style={{ animationDelay: "1s", opacity: 0, marginBottom: "2rem" }}
+          style={{ animationDelay: "2.5s", opacity: 0, marginBottom: "2rem" }}
         >
           <button
             className="hero-enter-btn"
-            onClick={() => router.push("/canvas")}
-            aria-label="Enter Canvas"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push("/canvas");
+            }}
+            aria-label="Initialize"
           >
-            Enter Canvas
+            INIT
           </button>
         </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div
-        className="hero-footer fade-in"
-        style={{
-          animationDelay: "1.4s",
-          opacity: 0,
-          color: "rgba(255,255,255,0.15)",
-          letterSpacing: "0.5em",
-          textTransform: "uppercase",
-          fontSize: "0.6rem",
-          fontFamily: "'SF Mono', 'Fira Code', monospace",
-          bottom: "2.5rem",
-        }}
-      >
-        InfiniteBoard
       </div>
     </main>
   );
