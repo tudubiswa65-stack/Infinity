@@ -10,12 +10,10 @@ import {
 import { useIdentity } from "@/hooks/useIdentity";
 import { useCanvas } from "@/hooks/useCanvas";
 import { useRateLimit } from "@/hooks/useRateLimit";
-import { useToast } from "@/hooks/useToast";
 import { Message, Stroke } from "@/types";
 import MessageCard from "./MessageCard";
 import Toolbar from "./Toolbar";
 import ThreadPanel from "./ThreadPanel";
-import ToastContainer from "./ToastContainer";
 
 function fmt(n: number): string {
   return n.toFixed(0);
@@ -78,7 +76,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     jumpTo,
   } = useCanvas(initialX, initialY);
   const { rateLimits, updateFromResponse, handleRateLimitError, checkCanProceed } = useRateLimit();
-  const { toasts, removeToast, success, error: showError, warning, info } = useToast();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -459,7 +456,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     // Check rate limit first
     const canSubmit = checkCanProceed("strokes");
     if (!canSubmit.allowed) {
-      showError(`Rate limited. Try again in ${canSubmit.secondsUntilReset}s.`);
       return;
     }
 
@@ -479,7 +475,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
       if (res.ok) {
         updateFromResponse("strokes", res.headers);
-        success("Stroke posted");
         const data = await res.json() as { stroke: Stroke };
         const newStroke = data.stroke;
         if (newStroke && !strokeIdsRef.current.has(newStroke.id)) {
@@ -488,16 +483,11 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         }
       } else if (res.status === 429) {
         handleRateLimitError("strokes", res.headers);
-        const data = await res.json() as { error: string };
-        showError(data.error);
-      } else {
-        const data = await res.json() as { error: string };
-        showError(data.error || "Failed to post stroke");
       }
     } catch {
-      showError("Network error. Please try again.");
+      // Errors silently ignored
     }
-  }, [checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
+  }, [checkCanProceed, updateFromResponse, handleRateLimitError]);
 
   // Submit a text message
   const submitMessage = useCallback(async (
@@ -513,7 +503,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     // Check rate limit first
     const canSubmit = checkCanProceed("messages");
     if (!canSubmit.allowed) {
-      showError(`Rate limited. Try again in ${canSubmit.secondsUntilReset}s.`);
       return;
     }
 
@@ -536,7 +525,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
       if (res.ok) {
         updateFromResponse("messages", res.headers);
-        success("Message posted");
         const data = await res.json() as { message: Message };
         const newMessage = data.message;
         if (newMessage && !messageIdsRef.current.has(newMessage.id)) {
@@ -545,16 +533,11 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         }
       } else if (res.status === 429) {
         handleRateLimitError("messages", res.headers);
-        const data = await res.json() as { error: string };
-        showError(data.error);
-      } else {
-        const data = await res.json() as { error: string };
-        showError(data.error || "Failed to post message");
       }
     } catch {
-      showError("Network error. Please try again.");
+      // Errors silently ignored
     }
-  }, [checkCanProceed, updateFromResponse, handleRateLimitError, showError, success]);
+  }, [checkCanProceed, updateFromResponse, handleRateLimitError]);
 
   // Space key handling — enables temporary pan in any mode
   useEffect(() => {
@@ -1432,9 +1415,6 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           onNavigateTo={handleNavigateToMessage}
         />
       )}
-
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }
