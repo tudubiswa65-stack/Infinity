@@ -19,6 +19,27 @@ function fmt(n: number): string {
   return n.toFixed(0);
 }
 
+/** Shortest distance from point (px, py) to line segment (x1,y1)→(x2,y2) in screen space. */
+function pointToSegmentDistance(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.sqrt((px - (x1 + t * dx)) ** 2 + (py - (y1 + t * dy)) ** 2);
+}
+
+/** Format a date string as a human-readable date and time. */
+function formatStrokeDateTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 interface InfiniteCanvasProps {
   initialX?: number;
   initialY?: number;
@@ -55,6 +76,10 @@ const REPLY_DIRECTIONS = [
 // used to ensure connector lines start/end at card borders rather than centers.
 const CARD_EDGE_OFFSET_PX = 60;
 
+// Minimum screen-space pixel radius for stroke hover hit detection. The actual
+// hit radius is max(stroke_width * scale / 2, STROKE_HOVER_THRESHOLD).
+const STROKE_HOVER_THRESHOLD = 8;
+
 export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +104,9 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
+  // Ref so handleMouseMove can access latest strokes without being recreated
+  const strokesRef = useRef<Stroke[]>([]);
+  useEffect(() => { strokesRef.current = strokes; }, [strokes]);
   const [brushColor, setBrushColor] = useState("#6366f1");
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState(3);
@@ -87,6 +115,9 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   const [threadMessage, setThreadMessage] = useState<Message | null>(null);
   // Tracks threads the user has manually collapsed; all other threads with replies are auto-expanded.
   const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());
+  // Hovered stroke tooltip state
+  const [hoveredStroke, setHoveredStroke] = useState<Stroke | null>(null);
+  const [strokeTooltipPos, setStrokeTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
   // Map each message id to a stacking index (oldest = 1, newest = N) so newer
   // messages always render on top when they overlap with older ones.
@@ -574,6 +605,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
   }, [endPan]);
 
   // Mouse event handlers
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // Middle-click: always pan regardless of mode
@@ -659,6 +691,31 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
       } else if (m === "write" || m === "pan") {
         updatePan(e.clientX, e.clientY);
       }
+
+      // Detect hover over strokes (only when not actively drawing)
+      if (!(m === "draw" && isDrawing.current)) {
+        const sx = e.clientX;
+        const sy = e.clientY - TOOLBAR_HEIGHT;
+        let found: Stroke | null = null;
+        // Iterate newest-first so topmost-drawn stroke wins
+        for (let i = strokesRef.current.length - 1; i >= 0; i--) {
+          const stroke = strokesRef.current[i];
+          if (stroke.points.length < 2) continue;
+          // Half the rendered stroke width (in screen pixels) or the minimum threshold, whichever is larger
+          const hitRadius = Math.max(stroke.stroke_width * scale * 0.5, STROKE_HOVER_THRESHOLD);
+          for (let j = 1; j < stroke.points.length; j++) {
+            const p1 = worldToScreen(stroke.points[j - 1].x, stroke.points[j - 1].y);
+            const p2 = worldToScreen(stroke.points[j].x, stroke.points[j].y);
+            if (pointToSegmentDistance(sx, sy, p1.x, p1.y, p2.x, p2.y) <= hitRadius) {
+              found = stroke;
+              break;
+            }
+          }
+          if (found) break;
+        }
+        setHoveredStroke(found);
+        setStrokeTooltipPos(found ? { x: e.clientX, y: e.clientY } : null);
+      }
     },
     [screenToWorld, worldToScreen, updatePan, scale]
   );
@@ -718,6 +775,8 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     }
     pendingCursorRef.current = null;
     setCursorWorld(null);
+    setHoveredStroke(null);
+    setStrokeTooltipPos(null);
     if (isTempPanning.current) {
       isTempPanning.current = false;
       endPan();
@@ -1404,6 +1463,41 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
           zoom {(scale * 100).toFixed(0)}%
         </span>
       </div>
+
+      {/* Stroke hover tooltip */}
+      {hoveredStroke && strokeTooltipPos && (
+        <div
+          style={{
+            position: "fixed",
+            left: strokeTooltipPos.x + 14,
+            top: strokeTooltipPos.y - 10,
+            background: "rgba(20, 20, 20, 0.95)",
+            border: `1px solid ${hoveredStroke.author_color}66`,
+            borderRadius: 8,
+            padding: "6px 10px",
+            backdropFilter: "blur(8px)",
+            pointerEvents: "none",
+            zIndex: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+          }}
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: hoveredStroke.author_color,
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ color: "#ccc", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+            {formatStrokeDateTime(hoveredStroke.created_at)}
+          </span>
+        </div>
+      )}
 
       {/* Thread Panel */}
       {threadMessage && (
