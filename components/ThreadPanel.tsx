@@ -350,6 +350,7 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
 
       {/* Panel */}
       <div
+        className="thread-panel-root"
         style={{
           position: "fixed",
           top: 56, // Below toolbar

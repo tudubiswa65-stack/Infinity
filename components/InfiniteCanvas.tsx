@@ -1297,7 +1297,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
                   <span style={{ color: parent.author_color, fontSize: "0.75rem", fontWeight: 600 }}>
                     ↩ Replying to {parent.author_name}
                   </span>
-                  <p style={{ color: "#aaa", fontSize: "0.75rem", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 264 }}>
+                  <p className="message-composer-reply-preview" style={{ color: "#aaa", fontSize: "0.75rem", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 264 }}>
                     {parent.content.slice(0, 80)}{parent.content.length > 80 ? "…" : ""}
                   </p>
                 </div>
@@ -1320,6 +1320,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               }}
               placeholder="Type your message... (Enter to submit, Shift+Enter for newline)"
               maxLength={500}
+              className="message-composer-textarea"
               style={{
                 background: "transparent",
                 border: "none",
