@@ -358,22 +358,24 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
           width: "400px",
           maxWidth: "90vw",
           background: PANEL_BG,
-          borderLeft: "1px solid #2a2a2a",
+          borderLeft: "1px solid rgba(99,102,241,0.12)",
           zIndex: 2001,
           display: "flex",
           flexDirection: "column",
           transform: isVisible ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 0.3s ease",
+          transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+          boxShadow: "-4px 0 32px rgba(0,0,0,0.5)",
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: "16px 20px",
-            borderBottom: "1px solid #2a2a2a",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            background: "rgba(255,255,255,0.02)",
           }}
         >
           <h2
@@ -390,9 +392,9 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
             onClick={onClose}
             style={{
               background: "transparent",
-              border: "none",
-              color: "#888",
-              fontSize: "1.5rem",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.5)",
+              fontSize: "1.1rem",
               cursor: "pointer",
               padding: 0,
               lineHeight: 1,
@@ -402,13 +404,17 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
               alignItems: "center",
               justifyContent: "center",
               borderRadius: "6px",
-              transition: "background 0.2s",
+              transition: "background 0.2s, border-color 0.2s, color 0.2s",
             }}
             onMouseOver={(e) => {
-              e.currentTarget.style.background = "#2a2a2a";
+              e.currentTarget.style.background = "rgba(248,113,113,0.1)";
+              e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)";
+              e.currentTarget.style.color = "#f87171";
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.color = "rgba(255,255,255,0.5)";
             }}
           >
             ×
@@ -500,10 +506,12 @@ function ThreadPanel({ currentMessage, messages, messageById, onClose, onNavigat
         <div
           style={{
             padding: "12px 20px",
-            borderTop: "1px solid #2a2a2a",
-            color: "#555",
-            fontSize: "0.75rem",
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+            color: "rgba(255,255,255,0.2)",
+            fontSize: "0.72rem",
             textAlign: "center",
+            background: "rgba(255,255,255,0.015)",
+            letterSpacing: "0.02em",
           }}
         >
           Click any message to jump to it on the canvas · Press Escape to close

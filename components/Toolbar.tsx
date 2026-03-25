@@ -23,10 +23,10 @@ interface ToolbarProps {
   rateLimits?: RateLimitState;
 }
 
-const MODES: { key: CanvasMode; label: string; title: string }[] = [
-  { key: "write", label: "✏️ Write", title: "Write mode: click to add text" },
-  { key: "draw",  label: "🖊️ Draw",  title: "Draw mode: drag to draw freehand" },
-  { key: "pan",   label: "🖐 Pan",   title: "Pan mode: drag to move the canvas" },
+const MODES: { key: CanvasMode; label: string; title: string; icon: string }[] = [
+  { key: "write", label: "Write", icon: "✏️", title: "Write mode: click to add text" },
+  { key: "draw",  label: "Draw",  icon: "🖊️", title: "Draw mode: drag to draw freehand" },
+  { key: "pan",   label: "Pan",   icon: "🖐", title: "Pan mode: drag to move the canvas" },
 ];
 
 const MODE_HINTS: Record<CanvasMode, string> = {
@@ -70,7 +70,6 @@ export default function Toolbar({
     setCoordInput("");
   }
 
-  // Get countdown string for rate limit
   function getCountdown(resetTime: number): string {
     const seconds = Math.max(0, Math.ceil((resetTime - Date.now()) / 1000));
     if (seconds < 60) return `${seconds}s`;
@@ -85,109 +84,187 @@ export default function Toolbar({
         left: 0,
         right: 0,
         height: 56,
-        background: "rgba(15,15,15,0.95)",
-        backdropFilter: "blur(12px)",
-        borderBottom: "1px solid #2a2a2a",
+        background: "rgba(8, 8, 10, 0.96)",
+        backdropFilter: "blur(16px)",
+        borderBottom: "1px solid rgba(99, 102, 241, 0.12)",
         display: "flex",
         alignItems: "center",
         padding: "0 1rem",
-        gap: "1rem",
+        gap: "0.75rem",
         zIndex: 100,
         userSelect: "none",
+        boxShadow: "0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.4)",
       }}
     >
-      {/* Left section — shrinks when viewport is narrow */}
+      {/* Left section */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "1rem",
+          gap: "0.75rem",
           flex: "1 1 0",
           minWidth: 0,
           overflow: "hidden",
         }}
       >
         {/* Brand */}
-        <span style={{ color: "#6366f1", fontWeight: 700, fontSize: "1.1rem", flexShrink: 0 }}>
-          ∞
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+          <span style={{ color: "#6366f1", fontWeight: 800, fontSize: "1.25rem", lineHeight: 1 }}>
+            ∞
+          </span>
+          <span
+            style={{
+              color: "rgba(255,255,255,0.55)",
+              fontSize: "0.8rem",
+              fontWeight: 500,
+              letterSpacing: "0.04em",
+            }}
+          >
+            Infinity
+          </span>
+        </div>
+
+        {/* Separator */}
+        <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
 
         {/* Mode Toggle */}
-        <div style={{ display: "flex", gap: 4, background: "#1a1a1a", borderRadius: 8, padding: 3, flexShrink: 0 }}>
-          {MODES.map(({ key, label, title }) => (
+        <div
+          style={{
+            display: "flex",
+            gap: 2,
+            background: "rgba(255,255,255,0.04)",
+            borderRadius: 8,
+            padding: 3,
+            border: "1px solid rgba(255,255,255,0.06)",
+            flexShrink: 0,
+          }}
+        >
+          {MODES.map(({ key, label, title, icon }) => (
             <button
               key={key}
               onClick={() => onModeChange(key)}
               title={title}
               style={{
-                background: mode === key ? "#6366f1" : "transparent",
-                color: mode === key ? "#fff" : "#888",
+                background: mode === key
+                  ? "linear-gradient(135deg, #6366f1, #7c3aed)"
+                  : "transparent",
+                color: mode === key ? "#fff" : "rgba(255,255,255,0.45)",
                 border: "none",
                 borderRadius: 6,
-                padding: "4px 12px",
+                padding: "4px 11px",
                 cursor: "pointer",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                transition: "all 0.15s",
+                fontSize: "0.78rem",
+                fontWeight: mode === key ? 600 : 400,
+                transition: "all 0.18s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                boxShadow: mode === key ? "0 1px 8px rgba(99,102,241,0.35)" : "none",
               }}
             >
-              {label}
+              <span style={{ fontSize: "0.85rem" }}>{icon}</span>
+              <span>{label}</span>
             </button>
           ))}
         </div>
 
-        {/* Color Palette (write + draw modes) */}
+        {/* Color Palette */}
         {mode !== "pan" && (
-          <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 5,
+              alignItems: "center",
+              flexShrink: 0,
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 8,
+              padding: "4px 8px",
+            }}
+          >
             {COLOR_PALETTE.map((color) => (
               <button
                 key={color}
                 onClick={() => onBrushColorChange(color)}
                 title={color}
                 style={{
-                  width: 20,
-                  height: 20,
+                  width: 18,
+                  height: 18,
                   borderRadius: "50%",
                   background: color,
-                  border: brushColor === color ? "2px solid #fff" : "2px solid transparent",
+                  border: brushColor === color
+                    ? "2px solid #fff"
+                    : "2px solid transparent",
                   cursor: "pointer",
                   padding: 0,
-                  transition: "transform 0.15s, border-color 0.15s",
-                  transform: brushColor === color ? "scale(1.2)" : "scale(1)",
+                  transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s",
+                  transform: brushColor === color ? "scale(1.25)" : "scale(1)",
+                  boxShadow: brushColor === color ? `0 0 8px ${color}66` : "none",
+                  outline: "none",
                 }}
               />
             ))}
           </div>
         )}
 
-        {/* Brush Size (draw mode only) */}
+        {/* Brush Size */}
         {mode === "draw" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            <span style={{ color: "#888", fontSize: "0.8rem" }}>Size:</span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 8,
+              padding: "4px 10px",
+            }}
+          >
+            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.75rem" }}>Size</span>
             <input
               type="range"
               min={1}
               max={20}
               value={brushSize}
               onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
-              style={{ width: 80, accentColor: "#6366f1" }}
+              style={{ width: 72, accentColor: "#6366f1", cursor: "pointer" }}
             />
-            <span style={{ color: "#888", fontSize: "0.8rem", minWidth: 20 }}>{brushSize}</span>
+            <span
+              style={{
+                color: "rgba(255,255,255,0.6)",
+                fontSize: "0.78rem",
+                minWidth: 18,
+                textAlign: "center",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {brushSize}
+            </span>
           </div>
         )}
 
-        {/* Hint */}
-        <span style={{ color: "#444", fontSize: "0.75rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {/* Mode hint */}
+        <span
+          style={{
+            color: "rgba(255,255,255,0.2)",
+            fontSize: "0.72rem",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            letterSpacing: "0.01em",
+          }}
+        >
           {MODE_HINTS[mode]}
         </span>
       </div>
 
-      {/* Right section — always visible */}
+      {/* Right section */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "1rem",
+          gap: "0.6rem",
           flexShrink: 0,
         }}
       >
@@ -201,54 +278,65 @@ export default function Toolbar({
             type="text"
             value={coordInput}
             onChange={(e) => { setCoordInput(e.target.value); setCoordError(false); }}
-            placeholder="x,y"
+            placeholder="x , y"
             style={{
-              width: 100,
-              background: coordError ? "rgba(248,113,113,0.1)" : "#1a1a1a",
-              border: `1px solid ${coordError ? "#f87171" : "#2a2a2a"}`,
+              width: 90,
+              background: coordError
+                ? "rgba(248,113,113,0.08)"
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${coordError ? "#f87171" : "rgba(255,255,255,0.1)"}`,
               borderRadius: 6,
-              padding: "3px 8px",
+              padding: "4px 8px",
               color: "#e5e5e5",
-              fontSize: "0.8rem",
+              fontSize: "0.78rem",
               outline: "none",
-              transition: "border-color 0.15s",
+              transition: "border-color 0.15s, background 0.15s",
+              textAlign: "center",
             }}
-            onFocus={(e) => { if (!coordError) e.target.style.borderColor = "#6366f1"; }}
-            onBlur={(e) => { if (!coordError) e.target.style.borderColor = "#2a2a2a"; }}
+            onFocus={(e) => {
+              if (!coordError) {
+                e.target.style.borderColor = "rgba(99,102,241,0.6)";
+                e.target.style.background = "rgba(99,102,241,0.06)";
+              }
+            }}
+            onBlur={(e) => {
+              if (!coordError) {
+                e.target.style.borderColor = "rgba(255,255,255,0.1)";
+                e.target.style.background = "rgba(255,255,255,0.04)";
+              }
+            }}
           />
           <button
             type="submit"
             title="Jump to coordinate"
             style={{
-              background: "#6366f1",
+              background: "linear-gradient(135deg, #6366f1, #7c3aed)",
               color: "#fff",
               border: "none",
               borderRadius: 6,
-              padding: "3px 10px",
-              fontSize: "0.8rem",
+              padding: "4px 10px",
+              fontSize: "0.78rem",
               fontWeight: 600,
               cursor: "pointer",
               whiteSpace: "nowrap",
-              transition: "background 0.15s",
+              transition: "opacity 0.15s, transform 0.15s",
+              boxShadow: "0 1px 8px rgba(99,102,241,0.3)",
             }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "#4f52d6")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "#6366f1")}
+            onMouseOver={(e) => {
+              e.currentTarget.style.opacity = "0.85";
+              e.currentTarget.style.transform = "scale(0.97)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.opacity = "1";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
           >
             Go →
           </button>
         </form>
 
-        {/* Connection indicator */}
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: isConnected ? "#4ade80" : "#f87171",
-            flexShrink: 0,
-          }}
-          title={isConnected ? "Connected" : "Offline"}
-        />
+        {/* Separator */}
+        <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
 
         {/* Rate limit indicator */}
         {rateLimits && (
@@ -257,23 +345,16 @@ export default function Toolbar({
               display: "flex",
               alignItems: "center",
               gap: 8,
-              padding: "4px 8px",
-              background: "#1a1a1a",
+              padding: "4px 10px",
+              background: "rgba(255,255,255,0.03)",
               borderRadius: 6,
-              border: "1px solid #2a2a2a",
+              border: "1px solid rgba(255,255,255,0.07)",
               fontSize: "0.75rem",
             }}
             title={`Messages: ${rateLimits.messages.remaining}/${rateLimits.messages.limit} · Strokes: ${rateLimits.strokes.remaining}/${rateLimits.strokes.limit}`}
           >
-            {/* Message limit */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              <span style={{ color: "#666" }}>✏️</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>✏️</span>
               <span
                 style={{
                   color: rateLimits.messages.isLimited
@@ -282,6 +363,7 @@ export default function Toolbar({
                     ? "#fbbf24"
                     : "#4ade80",
                   fontWeight: rateLimits.messages.isLimited ? 600 : 400,
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {rateLimits.messages.isLimited
@@ -290,17 +372,10 @@ export default function Toolbar({
               </span>
             </div>
 
-            <span style={{ color: "#333" }}>|</span>
+            <span style={{ color: "rgba(255,255,255,0.1)" }}>|</span>
 
-            {/* Stroke limit */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              <span style={{ color: "#666" }}>🖊️</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>🖊️</span>
               <span
                 style={{
                   color: rateLimits.strokes.isLimited
@@ -309,6 +384,7 @@ export default function Toolbar({
                     ? "#fbbf24"
                     : "#4ade80",
                   fontWeight: rateLimits.strokes.isLimited ? 600 : 400,
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {rateLimits.strokes.isLimited
@@ -319,37 +395,77 @@ export default function Toolbar({
           </div>
         )}
 
+        {/* Connection indicator */}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: isConnected ? "#4ade80" : "#f87171",
+              flexShrink: 0,
+              boxShadow: isConnected
+                ? "0 0 6px rgba(74,222,128,0.5)"
+                : "0 0 6px rgba(248,113,113,0.5)",
+            }}
+            title={isConnected ? "Connected" : "Offline"}
+          />
+          <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "0.7rem" }}>
+            {isConnected ? "Live" : "Offline"}
+          </span>
+        </div>
+
         {/* User Identity */}
         {identity && (
-          <button
-            onClick={handleNameClick}
-            title="Click to change name"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "transparent",
-              border: "1px solid #2a2a2a",
-              borderRadius: 6,
-              padding: "4px 10px",
-              cursor: "pointer",
-              transition: "border-color 0.15s",
-              flexShrink: 0,
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.borderColor = "#6366f1")}
-            onMouseOut={(e) => (e.currentTarget.style.borderColor = "#2a2a2a")}
-          >
-            <div
+          <>
+            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+            <button
+              onClick={handleNameClick}
+              title="Click to change name"
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: identity.color,
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 8,
+                padding: "4px 10px",
+                cursor: "pointer",
+                transition: "border-color 0.18s, background 0.18s",
                 flexShrink: 0,
               }}
-            />
-            <span style={{ color: "#e5e5e5", fontSize: "0.85rem" }}>{identity.name}</span>
-          </button>
+              onMouseOver={(e) => {
+                e.currentTarget.style.borderColor = "rgba(99,102,241,0.5)";
+                e.currentTarget.style.background = "rgba(99,102,241,0.06)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+              }}
+            >
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  background: identity.color,
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  color: "#000",
+                  boxShadow: `0 0 0 2px ${identity.color}44`,
+                }}
+              >
+                {(identity.name.charAt(0) || "?").toUpperCase()}
+              </div>
+              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.82rem", fontWeight: 500 }}>
+                {identity.name}
+              </span>
+            </button>
+          </>
         )}
       </div>
     </div>
