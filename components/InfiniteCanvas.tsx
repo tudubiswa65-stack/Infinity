@@ -32,11 +32,30 @@ const FETCH_BUFFER = 500;
 const FETCH_CACHE_BUFFER = 1500;
 const TOOLBAR_HEIGHT = 56;
 
-// World-unit offsets used both when placing a new reply and when computing the
+// World-unit radius used both when placing a new reply and when computing the
 // expanded-thread layout, so the two always stay in sync.
-const REPLY_STACK_OFFSET_X = 30;   // horizontal indent relative to parent
-const REPLY_STACK_OFFSET_Y = 200;  // vertical gap so reply appears below parent card
-const REPLY_STACK_SPACING = 160;   // vertical space between consecutive replies
+const REPLY_RADIUS = 200; // distance from parent message center
+
+// Unit vector component for 45-degree diagonal directions (1 / √2)
+const D = Math.SQRT1_2;
+
+// Unit-direction vectors for each successive reply, forming a radial fan.
+// Replies spread outward in multiple directions so threads don't stack into a
+// single long vertical column.
+const REPLY_DIRECTIONS = [
+  { dx: 0,  dy: 1  }, // index 0: directly below
+  { dx: D,  dy: D  }, // index 1: below-right (45°)
+  { dx: -D, dy: D  }, // index 2: below-left  (135°)
+  { dx: 1,  dy: 0  }, // index 3: right
+  { dx: -1, dy: 0  }, // index 4: left
+  { dx: D,  dy: -D }, // index 5: above-right (315°)
+  { dx: -D, dy: -D }, // index 6: above-left  (225°)
+  { dx: 0,  dy: -1 }, // index 7: above
+] as const;
+
+// Approximate screen-space distance from a message card's center to its edge,
+// used to ensure connector lines start/end at card borders rather than centers.
+const CARD_EDGE_OFFSET_PX = 60;
 
 export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -170,13 +189,17 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
         .filter(m => m.reply_to_id === parentId)
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
-      // Stack replies vertically below parent with offset
+      // Fan replies outward in multiple directions from the parent.
+      // Each successive reply uses the next direction in REPLY_DIRECTIONS;
+      // once all directions are exhausted, a new "generation" starts at 2×radius.
       replies.forEach((reply, index) => {
+        const dir = REPLY_DIRECTIONS[index % REPLY_DIRECTIONS.length];
+        const generation = Math.floor(index / REPLY_DIRECTIONS.length) + 1;
         layout.set(reply.id, {
           parentId,
           index,
-          computedX: parent.coord_x + REPLY_STACK_OFFSET_X,
-          computedY: parent.coord_y + REPLY_STACK_OFFSET_Y + (index * REPLY_STACK_SPACING),
+          computedX: parent.coord_x + dir.dx * REPLY_RADIUS * generation,
+          computedY: parent.coord_y + dir.dy * REPLY_RADIUS * generation,
         });
       });
     });
@@ -883,14 +906,16 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.color]);
 
-  // Handle reply: open text input positioned below the original message
+  // Handle reply: open text input positioned using the same radial fan layout as threadLayout
   const handleReply = useCallback(
     (msg: Message) => {
-      // Count existing direct replies to determine vertical stacking offset,
-      // matching the threadLayout so the stored position aligns with expanded view.
+      // Count existing direct replies so the new reply lands in the next free direction,
+      // matching threadLayout so the stored position aligns with the expanded view.
       const existingRepliesCount = messages.filter(m => m.reply_to_id === msg.id).length;
-      const replyWorldX = msg.coord_x + REPLY_STACK_OFFSET_X;
-      const replyWorldY = msg.coord_y + REPLY_STACK_OFFSET_Y + existingRepliesCount * REPLY_STACK_SPACING;
+      const dir = REPLY_DIRECTIONS[existingRepliesCount % REPLY_DIRECTIONS.length];
+      const generation = Math.floor(existingRepliesCount / REPLY_DIRECTIONS.length) + 1;
+      const replyWorldX = msg.coord_x + dir.dx * REPLY_RADIUS * generation;
+      const replyWorldY = msg.coord_y + dir.dy * REPLY_RADIUS * generation;
       const replyScreen = worldToScreen(replyWorldX, replyWorldY);
       // Keep the text-input composer within the visible viewport
       const INPUT_MARGIN = 200;
@@ -1088,7 +1113,7 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
               );
             })}
           
-          {/* YouTube-style vertical+horizontal connectors for expanded thread views */}
+          {/* Straight connectors for expanded thread views (replies fan out in multiple directions) */}
           {Array.from(threadLayout.entries()).map(([replyId, layout]) => {
             const reply = messageById.get(replyId);
             const parent = messageById.get(layout.parentId);
@@ -1096,42 +1121,39 @@ export default function InfiniteCanvas({ initialX = 0, initialY = 0 }: InfiniteC
             
             const replyScreen = worldToScreen(layout.computedX, layout.computedY);
             const parentScreen = worldToScreen(parent.coord_x, parent.coord_y);
-            
-            // Vertical line goes from just below the parent card down to the reply level,
-            // then a short horizontal arm reaches right to the reply card.
-            const lineX = parentScreen.x + 8;
-            const lineStartY = parentScreen.y + 28 * scale;
-            const lineEndY = replyScreen.y;
-            const armEndX = replyScreen.x - 10 * scale;
+
+            // Compute a unit vector from parent to reply so we can offset both
+            // endpoints outward from their card centers to the card edges.
+            const rawDx = replyScreen.x - parentScreen.x;
+            const rawDy = replyScreen.y - parentScreen.y;
+            const dist = Math.sqrt(rawDx * rawDx + rawDy * rawDy) || 1;
+            const ux = rawDx / dist;
+            const uy = rawDy / dist;
+            const lineX1 = parentScreen.x + ux * CARD_EDGE_OFFSET_PX;
+            const lineY1 = parentScreen.y + uy * CARD_EDGE_OFFSET_PX;
+            const lineX2 = replyScreen.x - ux * CARD_EDGE_OFFSET_PX;
+            const lineY2 = replyScreen.y - uy * CARD_EDGE_OFFSET_PX;
+            const dotX  = replyScreen.x - ux * CARD_EDGE_OFFSET_PX;
+            const dotY  = replyScreen.y - uy * CARD_EDGE_OFFSET_PX;
 
             return (
               <g key={`expanded-thread-${replyId}`}>
-                {/* Vertical segment */}
+                {/* Straight dashed line from parent card edge to reply card edge */}
                 <line
-                  x1={lineX}
-                  y1={lineStartY}
-                  x2={lineX}
-                  y2={lineEndY}
+                  x1={lineX1}
+                  y1={lineY1}
+                  x2={lineX2}
+                  y2={lineY2}
                   stroke={parent.author_color}
                   strokeWidth={2}
+                  strokeDasharray="6 4"
                   opacity={0.55}
                   strokeLinecap="round"
                 />
-                {/* Horizontal arm to reply */}
-                <line
-                  x1={lineX}
-                  y1={lineEndY}
-                  x2={armEndX}
-                  y2={lineEndY}
-                  stroke={parent.author_color}
-                  strokeWidth={2}
-                  opacity={0.55}
-                  strokeLinecap="round"
-                />
-                {/* Dot at junction with reply */}
+                {/* Dot at the edge of the reply card */}
                 <circle
-                  cx={armEndX}
-                  cy={lineEndY}
+                  cx={dotX}
+                  cy={dotY}
                   r={3}
                   fill={parent.author_color}
                   opacity={0.8}
