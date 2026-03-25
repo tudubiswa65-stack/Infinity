@@ -78,6 +78,7 @@ function Toolbar({
 
   return (
     <div
+      className="toolbar-root"
       style={{
         position: "fixed",
         top: 0,
@@ -98,6 +99,7 @@ function Toolbar({
     >
       {/* Left section */}
       <div
+        className="toolbar-left"
         style={{
           display: "flex",
           alignItems: "center",
@@ -163,7 +165,7 @@ function Toolbar({
               }}
             >
               <span style={{ fontSize: "0.85rem" }}>{icon}</span>
-              <span>{label}</span>
+              <span className="toolbar-mode-label">{label}</span>
             </button>
           ))}
         </div>
@@ -171,6 +173,7 @@ function Toolbar({
         {/* Color Palette */}
         {mode !== "pan" && (
           <div
+            className="toolbar-colors"
             style={{
               display: "flex",
               gap: 5,
@@ -210,6 +213,7 @@ function Toolbar({
         {/* Brush Size */}
         {mode === "draw" && (
           <div
+            className="toolbar-brush"
             style={{
               display: "flex",
               alignItems: "center",
@@ -246,6 +250,7 @@ function Toolbar({
 
         {/* Mode hint */}
         <span
+          className="toolbar-hint"
           style={{
             color: "rgba(255,255,255,0.2)",
             fontSize: "0.72rem",
@@ -261,6 +266,7 @@ function Toolbar({
 
       {/* Right section */}
       <div
+        className="toolbar-right"
         style={{
           display: "flex",
           alignItems: "center",
@@ -270,6 +276,7 @@ function Toolbar({
       >
         {/* Coordinate Jump */}
         <form
+          className="toolbar-coord-form"
           onSubmit={handleJumpSubmit}
           title="Jump to coordinate (x,y)"
           style={{ display: "flex", gap: 4, alignItems: "center" }}
@@ -341,6 +348,7 @@ function Toolbar({
         {/* Rate limit indicator */}
         {rateLimits && (
           <div
+            className="toolbar-rate-limits"
             style={{
               display: "flex",
               alignItems: "center",
@@ -410,7 +418,7 @@ function Toolbar({
             }}
             title={isConnected ? "Connected" : "Offline"}
           />
-          <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "0.7rem" }}>
+          <span className="toolbar-conn-label" style={{ color: "rgba(255,255,255,0.2)", fontSize: "0.7rem" }}>
             {isConnected ? "Live" : "Offline"}
           </span>
         </div>
@@ -461,7 +469,7 @@ function Toolbar({
               >
                 {(identity.name.charAt(0) || "?").toUpperCase()}
               </div>
-              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.82rem", fontWeight: 500 }}>
+              <span className="toolbar-user-name" style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.82rem", fontWeight: 500 }}>
                 {identity.name}
               </span>
             </button>
