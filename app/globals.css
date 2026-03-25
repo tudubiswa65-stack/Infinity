@@ -195,6 +195,72 @@ body {
   z-index: 10;
 }
 
+/* ── Responsive Toolbar ─────────────────────────────────────────────────── */
+
+/* Mobile: stack into two rows so every control is reachable */
+@media (max-width: 640px) {
+  /* Toolbar grows in height to fit wrapped rows */
+  .toolbar-root {
+    height: auto !important;
+    flex-wrap: wrap;
+    padding: 6px 0.75rem !important;
+    gap: 4px !important;
+    row-gap: 6px;
+  }
+
+  /* Left section takes full width → mode buttons, colors, and brush all visible */
+  .toolbar-left {
+    flex: 1 1 100% !important;
+    flex-wrap: wrap;
+    overflow: visible !important;
+    gap: 6px !important;
+    align-items: center;
+  }
+
+  /* Right section sits on its own row beneath the left section */
+  .toolbar-right {
+    flex: 1 1 100% !important;
+    flex-wrap: wrap;
+    gap: 6px !important;
+    align-items: center;
+  }
+
+  /* Hide text labels on mode buttons – icons are self-explanatory on mobile */
+  .toolbar-mode-label {
+    display: none;
+  }
+
+  /* Hide the mode-hint string – saves significant horizontal space */
+  .toolbar-hint {
+    display: none;
+  }
+
+  /* Hide coordinate-jump form – less critical on mobile, reclaimed for tools */
+  .toolbar-coord-form {
+    display: none;
+  }
+
+  /* Condense rate-limit badge slightly */
+  .toolbar-rate-limits {
+    font-size: 0.7rem !important;
+  }
+
+  /* Hide "Live / Offline" text next to the status dot */
+  .toolbar-conn-label {
+    display: none;
+  }
+
+  /* Hide user display-name; avatar dot remains visible & clickable */
+  .toolbar-user-name {
+    display: none;
+  }
+
+  /* Let the color palette wrap if needed instead of being clipped */
+  .toolbar-colors {
+    flex-wrap: wrap;
+  }
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   .fade-in {
